@@ -2091,7 +2091,7 @@ frappe.provide("wss");
 					{ fieldtype: "Select", fieldname: "indicator_color", label: __("Indicator Color"), options: ["", "Green", "Cyan", "Blue", "Orange", "Yellow", "Gray", "Red", "Pink", "Purple"] },
 					{ fieldtype: "Column Break" },
 					{ fieldtype: "Link", fieldname: "parent_page", label: __("Parent Workspace"), options: "Workspace" },
-					{ fieldtype: "Link", fieldname: "module", label: __("Module"), options: "Module Def", description: __("Optional. Leave empty for site-level workspaces.") },
+					{ fieldtype: "Link", fieldname: "module", label: __("Module"), options: "Module Def", description: __("Leave empty to use 'Custom Workspaces'. Personal copies always go to 'Private'.") },
 					{ fieldtype: "Float", fieldname: "sequence_id", label: __("Sequence") },
 				],
 				p,

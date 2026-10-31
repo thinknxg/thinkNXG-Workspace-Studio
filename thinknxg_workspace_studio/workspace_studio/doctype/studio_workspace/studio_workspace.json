@@ -99,7 +99,7 @@
    "options": "Workspace"
   },
   {
-   "description": "Leave empty for site-level workspaces. Setting a module in developer mode can export the workspace into that app's files.",
+   "description": "v16 requires a module on every workspace. Leave empty to use 'Custom Workspaces'. Personal copies always go to the 'Private' module.",
    "fieldname": "module",
    "fieldtype": "Link",
    "label": "Module",

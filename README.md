@@ -68,7 +68,9 @@ Run the pure tests: `python -m unittest thinknxg_workspace_studio.tests.test_sch
 
 ## Notes for v16
 
-* Developer mode: leave **Module** empty unless you intend the published workspace to be exported into that app's files.
+* **Module**: v16 requires one on every Workspace. If the studio leaves it empty, shared workspaces go to
+  `Custom Workspaces` and personal copies to `Private` (Frappe's own triage modules, created if missing).
+  Published workspaces are saved with `standard = 0`, so developer mode never exports them into app files.
 * Publishing runs as Administrator after checking the caller has System Manager or Workspace Studio Manager, because
   Frappe only lets the *Workspace Manager* role save public workspaces.
 * Designer state is kept in hidden fields on **Studio Workspace**; the form shows an *Open Designer* button instead.

@@ -23,6 +23,35 @@ STRIP_KEYS = ("creation", "modified", "modified_by", "owner", "docstatus", "idx"
               "_comments", "_assign", "_liked_by", "_seen")
 CHILD_STRIP_KEYS = STRIP_KEYS + ("name", "parent", "parentfield", "parenttype")
 MANAGED_DOCTYPES = ("Workspace", "Workspace Sidebar", "Desktop Icon")
+# v16: Workspace.module is mandatory. Frappe triages pages created without one into these.
+PRIVATE_MODULE = "Private"
+CUSTOM_MODULE = "Custom Workspaces"
+
+
+def resolve_module(chosen, for_user):
+    """Module for a published workspace.
+
+    Private (personal) pages always live in v16's `Private` module, which is what the desk draws
+    each user's own shell from. Shared pages use the studio's module, or `Custom Workspaces`
+    when none is chosen (a shared page may not use `Private`).
+    """
+    if for_user:
+        target = PRIVATE_MODULE
+    elif chosen and chosen != PRIVATE_MODULE:
+        return chosen
+    else:
+        target = CUSTOM_MODULE
+    try:
+        from frappe.desk.doctype.workspace.workspace import triage_module
+
+        return triage_module(for_user)
+    except ImportError:
+        pass
+    if not frappe.db.exists("Module Def", target):
+        frappe.get_doc({"doctype": "Module Def", "module_name": target, "custom": 1}).insert(
+            ignore_permissions=True
+        )
+    return target
 
 
 def slug(text):
@@ -158,7 +187,9 @@ class Publisher:
             "icon": self.doc.icon or None,
             "indicator_color": self.doc.indicator_color or None,
             "parent_page": (self.doc.parent_page or "") if public else "",
-            "module": (self.doc.module or None) if public else None,
+            "module": resolve_module(self.doc.module, None if public else for_user),
+            "type": "Workspace",
+            "standard": 0,
             "sequence_id": self.doc.sequence_id or 0,
             "is_hidden": 0,
             "content": json.dumps(payload["content"]),
@@ -273,7 +304,7 @@ class Publisher:
             "label": name,
             "header_icon": self.doc.icon or None,
             "icon": self.doc.icon or None,
-            "module": self.doc.module or None,
+            "module": resolve_module(self.doc.module, None),
         }
         sb.update(self.filter_values("Workspace Sidebar", header, "Workspace Sidebar"))
         sb.set(table_df.fieldname, [])
@@ -297,15 +328,17 @@ class Publisher:
             return
         meta = frappe.get_meta("Desktop Icon")
         lt_df = meta.get_field("link_type")
-        prefs = ["Workspace Sidebar", "Workspace", "Link"] if sidebar_published else ["Workspace", "Link"]
+        prefs = ["Workspace Sidebar", "Workspace", "External", "Link"] if sidebar_published else ["Workspace", "External", "Link"]
         link_type = pick_option(lt_df, prefs) if lt_df else None
         values = {
             "label": name,
             "icon": self.doc.icon or None,
+            "icon_type": "Link",
             "hidden": 0,
             "standard": 0,
             "link_type": link_type,
             "link_to": name if link_type in ("Workspace Sidebar", "Workspace") else None,
+            "sidebar": name if link_type == "Workspace Sidebar" else None,
             "link": "/app/" + slug(self.title),
             "idx": cint(self.doc.sequence_id),
         }
@@ -320,6 +353,8 @@ class Publisher:
             icon = frappe.new_doc("Desktop Icon")
             action = "created"
         icon.update(self.filter_values("Desktop Icon", values, "Desktop Icon"))
+        if icon.meta.has_field("roles"):
+            icon.set("roles", [{"role": r} for r in self.target_roles()])
         try:
             if existing:
                 icon.save(ignore_permissions=True)
