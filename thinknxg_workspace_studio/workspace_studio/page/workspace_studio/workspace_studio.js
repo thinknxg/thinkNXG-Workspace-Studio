@@ -110,15 +110,18 @@ frappe.provide("wss");
 		},
 	};
 	const SHORTCUT_COLORS = { Grey: "#94a3b8", Green: "#22c55e", Red: "#ef4444", Orange: "#f97316", Pink: "#ec4899", Yellow: "#eab308", Blue: "#3b82f6", Cyan: "#06b6d4" };
+	// native: the v16 Dock can hold it. The rest go to the Studio Quick Launch bar.
 	const DOCK_TYPES = {
-		Workspace: { label: __("Workspace"), icon: "workspace", color: "#4f46e5" },
+		Sidebar: { label: __("Module"), icon: "sidebar", color: "#4f46e5", native: true },
+		Workspace: { label: __("Workspace"), icon: "workspace", color: "#6366f1", native: true },
 		DocType: { label: __("DocType List"), icon: "doctype", color: "#0ea5e9" },
 		New: { label: __("New Document"), icon: "plus", color: "#10b981" },
 		Report: { label: __("Report"), icon: "report", color: "#f59e0b" },
 		Page: { label: __("Page"), icon: "page", color: "#8b5cf6" },
 		Dashboard: { label: __("Dashboard"), icon: "dashboard", color: "#ef4444" },
-		URL: { label: __("External URL"), icon: "globe", color: "#64748b" },
+		URL: { label: __("External URL"), icon: "globe", color: "#64748b", native: true },
 	};
+	const is_native_dock = (it) => it.type === "item" && !!(DOCK_TYPES[it.link_type] || {}).native;
 	const SWATCHES = ["#4f46e5", "#0ea5e9", "#06b6d4", "#10b981", "#22c55e", "#eab308", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#8b5cf6", "#64748b", "#0f172a"];
 	const SIDEBAR_TYPES = {
 		section: { label: __("Section"), icon: "section", desc: __("Collapsible group") },
@@ -887,9 +890,16 @@ frappe.provide("wss");
 					<button class="wss-pal-btn" data-pal-cmd="sb-bulk">${ico("doctype", 15)} ${__("Add DocType links...")}</button>
 					<button class="wss-pal-btn" data-pal-cmd="sb-clear">${ico("trash", 15)} ${__("Clear menu")}</button>`);
 			} else if (this.tab === "dock") {
-				$p.append(`<div class="wss-pal-group">${__("Dock items")}</div>`);
-				Object.entries(DOCK_TYPES).forEach(([t, d]) => $p.append(this.pal_item("dock", t, d.icon, d.label, "")));
-				$p.append(this.pal_item("dock", "separator", "separator", __("Separator"), ""));
+				const native = this.hints.native_navigation !== false;
+				$p.append(`<div class="wss-pal-group">${native ? __("v16 Dock") : __("Dock")}</div>`);
+				Object.entries(DOCK_TYPES)
+					.filter(([, d]) => d.native)
+					.forEach(([t, d]) => $p.append(this.pal_item("dock", t, d.icon, d.label, native ? __("Native Dock entry") : "")));
+				$p.append(`<div class="wss-pal-group">${native ? __("Quick Launch bar") : __("More")}</div>`);
+				Object.entries(DOCK_TYPES)
+					.filter(([, d]) => !d.native)
+					.forEach(([t, d]) => $p.append(this.pal_item("dock", t, d.icon, d.label, native ? __("Studio bar") : "")));
+				$p.append(this.pal_item("dock", "separator", "separator", __("Separator"), native ? __("Studio bar") : ""));
 				$p.append(`<div class="wss-pal-group">${__("Quick build")}</div>
 					<button class="wss-pal-btn" data-pal-cmd="dock-from-layout">${ico("wand", 15)} ${__("Add layout shortcuts")}</button>
 					<button class="wss-pal-btn" data-pal-cmd="dock-clear">${ico("trash", 15)} ${__("Clear dock")}</button>`);
@@ -1638,6 +1648,7 @@ frappe.provide("wss");
 			this.$stage.html(`
 				<div class="wss-sb-stage">
 					${no_doctype ? `<div class="wss-banner">${ico("info", 15)} ${__("This site has no Workspace Sidebar DocType (pre-v16). The menu is saved with the studio but is only published on v16.")}</div>` : ""}
+					${this.hints.native_navigation !== false ? `<div class="wss-banner is-info">${ico("info", 15)} ${__("Published as the sidebar of this studio's module: site-wide in Shared mode, per user in Personal mode.")}</div>` : ""}
 					<div class="wss-sb-frame">
 						<div class="wss-sb-mock">
 							<div class="wss-sb-head"><span class="wss-sb-head-ico">${ficon(p.icon, "md") || ico("workspace", 16)}</span><span>${esc(p.workspace_title || this.data.title)}</span></div>
@@ -1654,6 +1665,9 @@ frappe.provide("wss");
 				</div>`);
 			const $list = this.$stage.find(".wss-sb-list");
 			const items = this.state.sidebar.items;
+			if (this.hints.native_navigation !== false) {
+				$list.append(`<div class="wss-sb-row wss-sb-link is-auto" title="${__("Added automatically so the module opens on this workspace")}"><span class="wss-sb-ico">${ficon(p.icon) || ico("workspace", 14)}</span><span class="wss-sb-label">${esc(p.workspace_title || this.data.title)}</span><span class="wss-sb-type">${__("Workspace · auto")}</span></div>`);
+			}
 			if (!items.length) $list.append(`<div class="wss-sb-blank">${__("Empty menu — drag a Section or Link here, or use 'Generate from layout'.")}</div>`);
 			items.forEach((it, i) => {
 				$list.append(this.sb_row(it, [i]));
@@ -1878,7 +1892,7 @@ frappe.provide("wss");
 			this.$stage.html(`
 				<div class="wss-dock-stage">
 					<div class="wss-desk wss-desk--${d.position} ${d.enabled ? "" : "is-off"}">
-						<div class="wss-desk-chrome"><i></i><i></i><i></i><span>/app/${esc(frappe.router ? frappe.router.slug(this.props.workspace_title || this.data.title) : "")}</span></div>
+						<div class="wss-desk-chrome"><i></i><i></i><i></i><span>/desk/${esc(frappe.router ? frappe.router.slug(this.props.workspace_title || this.data.title) : "")}</span></div>
 						<div class="wss-desk-body">
 							<div class="wss-ghost-title"></div>
 							<div class="wss-ghost-row"><span></span><span></span><span></span><span></span></div>
@@ -1887,16 +1901,29 @@ frappe.provide("wss");
 						<nav class="${classes} wss-dock--preview"></nav>
 						${d.enabled ? "" : `<div class="wss-desk-off">${__("Dock is turned off for this studio")}</div>`}
 					</div>
-					<div class="wss-dock-help">${ico("info", 13)} ${__("Drag to reorder. Items the user has no permission for are hidden automatically. The highest-priority published studio that matches a user provides their Dock.")}</div>
+					<div class="wss-dock-help">${ico("info", 13)} ${
+						this.hints.native_navigation !== false
+							? __("The first entry (this studio's module) is added automatically. Module, Workspace and URL entries go to the native v16 Dock; entries with a dashed ring (lists, new documents, reports, pages, dashboards) appear in the Studio Quick Launch bar.")
+							: __("Drag to reorder. Items the user has no permission for are hidden automatically.")
+					}</div>
 				</div>`);
 			const $dock = this.$stage.find(".wss-dock--preview");
 			const html = (it) =>
 				window.wss && wss.dock && wss.dock.item_html
 					? wss.dock.item_html(it, `draggable="true" data-id="${it.id}"`)
 					: `<button class="wss-dock-item" draggable="true" data-id="${it.id}">${esc(it.label || "|")}</button>`;
+			const native = this.hints.native_navigation !== false;
+			if (native) {
+				const home = { type: "item", label: this.props.workspace_title || this.data.title, icon: this.props.icon, color: "#4f46e5" };
+				const $home = $(window.wss && wss.dock && wss.dock.item_html ? wss.dock.item_html(home) : `<button class="wss-dock-item">${esc(home.label)}</button>`);
+				$home.addClass("is-auto").attr("title", __("Added automatically: this studio's module"));
+				$dock.append($home);
+			}
 			if (!d.items.length) $dock.append(`<div class="wss-dock-empty">${__("Drag items here")}</div>`);
 			d.items.forEach((it) => {
 				const $el = $(html(it));
+				if (native && it.type === "separator") $el.addClass("is-ql");
+				if (native && it.type === "item" && !is_native_dock(it)) $el.addClass("is-ql").attr("title", it.label + " · " + __("Quick Launch bar"));
 				if (this.sel.dock === it.id) $el.addClass("is-selected");
 				if (it.type === "item" && !(it.link_type === "URL" ? it.url : it.link_to)) $el.addClass("is-incomplete");
 				$dock.append($el);
@@ -1978,10 +2005,36 @@ frappe.provide("wss");
 					${this.hints.dock_enabled === 0 ? `<div class="wss-note">${ico("alert", 13)} ${__("The Dock is switched off globally in Workspace Studio Settings.")}</div>` : ""}
 					<div class="wss-ins-issues"></div>`);
 				const opt = (arr) => arr.map(([v, l]) => ({ value: v, label: l }));
+				if (this.hints.native_navigation !== false) {
+					$i.find(".wss-ins-form").before(`<div class="wss-ins-section"><div class="wss-ins-label">${__("v16 Dock")}</div><div data-form="native"></div></div>`);
+					const apps = (this.hints.installed_apps || []).map((a) => ({ value: a, label: a }));
+					make_form(
+						$i.find("[data-form=native]"),
+						[
+							{ fieldtype: "Check", fieldname: "enable_dock", label: __("Publish to the Dock") },
+							{ fieldtype: "Select", fieldname: "dock_app", label: __("App rail"), options: [{ value: "", label: __("Default (ERPNext, else Frappe)") }].concat(apps) },
+							{
+								fieldtype: "Select",
+								fieldname: "dock_mode",
+								label: __("Mode"),
+								options: [
+									{ value: "Add to the app's Dock", label: __("Add to the existing rail") },
+									{ value: "Replace the app's Dock", label: __("Replace the rail with these entries") },
+								],
+							},
+						],
+						this.props,
+						(field, value) => {
+							this.props[field] = value;
+							this.commit_soon();
+						}
+					);
+					$i.find(".wss-ins-form").before(`<div class="wss-ins-label" style="padding:12px 16px 0">${__("Quick Launch bar")}</div>`);
+				}
 				make_form(
 					$i.find(".wss-ins-form"),
 					[
-						{ fieldtype: "Check", fieldname: "enabled", label: __("Show the Dock") },
+						{ fieldtype: "Check", fieldname: "enabled", label: __("Show the Quick Launch bar") },
 						{ fieldtype: "Select", fieldname: "position", label: __("Position"), options: opt([["bottom", __("Bottom")], ["left", __("Left")], ["right", __("Right")]]) },
 						{ fieldtype: "Select", fieldname: "size", label: __("Icon size"), options: opt([["small", __("Small")], ["medium", __("Medium")], ["large", __("Large")]]) },
 						{ fieldtype: "Select", fieldname: "style", label: __("Style"), options: opt([["glass", __("Frosted glass")], ["solid", __("Solid")], ["minimal", __("Minimal")]]) },
@@ -2007,7 +2060,7 @@ frappe.provide("wss");
 			}
 			const type_meta = DOCK_TYPES[it.link_type] || DOCK_TYPES.DocType;
 			$i.html(`
-				<div class="wss-ins-head"><span class="wss-ins-swatch" style="background:${esc(it.color)}">${ico(type_meta.icon, 15)}</span><div><div class="wss-ins-title">${esc(it.label)}</div><div class="wss-ins-sub">${type_meta.label}</div></div></div>
+				<div class="wss-ins-head"><span class="wss-ins-swatch" style="background:${esc(it.color)}">${ico(type_meta.icon, 15)}</span><div><div class="wss-ins-title">${esc(it.label)}</div><div class="wss-ins-sub">${type_meta.label} · ${this.hints.native_navigation === false ? __("Studio bar") : type_meta.native ? __("v16 Dock") : __("Quick Launch bar")}</div></div></div>
 				<div class="wss-ins-section wss-ins-form"></div>
 				<div class="wss-ins-section"><div class="wss-ins-label">${__("Quick colors")}</div><div class="wss-swatches">${SWATCHES.map((c) => `<button data-c="${c}" style="background:${c}" class="${c === it.color ? "is-active" : ""}" title="${c}"></button>`).join("")}</div></div>
 				<div class="wss-ins-foot">
@@ -2016,7 +2069,7 @@ frappe.provide("wss");
 				</div>`);
 			$i.find("[data-foot=dup]").on("click", () => this.duplicate_selected());
 			$i.find("[data-foot=del]").on("click", () => this.delete_selected());
-			const target_doctype = { Workspace: "Workspace", DocType: "DocType", New: "DocType", Report: "Report", Page: "Page", Dashboard: "Dashboard" }[it.link_type];
+			const target_doctype = { Sidebar: "Module Def", Workspace: "Workspace", DocType: "DocType", New: "DocType", Report: "Report", Page: "Page", Dashboard: "Dashboard" }[it.link_type];
 			const fields = [
 				{ fieldtype: "Select", fieldname: "link_type", label: __("Opens"), options: Object.entries(DOCK_TYPES).map(([v, m]) => ({ value: v, label: m.label })) },
 				it.link_type === "URL"
@@ -2027,7 +2080,7 @@ frappe.provide("wss");
 			if (it.link_type === "URL") fields.push({ fieldtype: "Check", fieldname: "new_tab", label: __("Open in new tab") });
 			fields.push(
 				{ fieldtype: "Data", fieldname: "label", label: __("Label"), reqd: 1 },
-				{ fieldtype: "Icon", fieldname: "icon", label: __("Icon"), description: __("Leave empty to show initials.") },
+				{ fieldtype: "Icon", fieldname: "icon", label: __("Icon"), description: __("Leave empty to show initials (the v16 Dock uses a default icon).") },
 				{ fieldtype: "Color", fieldname: "color", label: __("Tile color") },
 				roles_df()
 			);

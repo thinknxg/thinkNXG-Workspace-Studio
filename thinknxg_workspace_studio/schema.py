@@ -42,7 +42,9 @@ SHORTCUT_COLORS = ("Grey", "Green", "Red", "Orange", "Pink", "Yellow", "Blue", "
 DOC_VIEWS = ("", "List", "Report Builder", "Dashboard", "Tree", "New", "Calendar", "Kanban")
 CARD_LINK_TYPES = ("DocType", "Report", "Page")
 SIDEBAR_LINK_TYPES = ("DocType", "Report", "Page", "Workspace", "Dashboard", "URL")
-DOCK_LINK_TYPES = ("Workspace", "DocType", "New", "Report", "Page", "Dashboard", "URL")
+DOCK_LINK_TYPES = ("Workspace", "Sidebar", "DocType", "New", "Report", "Page", "Dashboard", "URL")
+# What the native v16 Dock can hold. Everything else goes to the Studio Quick Launch bar.
+NATIVE_DOCK_TYPES = ("Workspace", "Sidebar", "URL")
 DOCK_POSITIONS = ("bottom", "left", "right")
 DOCK_STYLES = ("glass", "solid", "minimal")
 DOCK_SIZES = ("small", "medium", "large")
@@ -581,6 +583,7 @@ def flatten_sidebar(sidebar, user_roles=None):
             rows.append(
                 {
                     "kind": "section",
+                    "id": it["id"],
                     "label": it["label"],
                     "icon": it["icon"],
                     "collapsible": it["collapsible"],
@@ -597,9 +600,10 @@ def flatten_sidebar(sidebar, user_roles=None):
 
 def _flat_child(c, child):
     if c["type"] == "spacer":
-        return {"kind": "spacer", "label": "", "child": child}
+        return {"kind": "spacer", "id": c["id"], "label": "", "child": child}
     return {
         "kind": "link",
+        "id": c["id"],
         "label": c["label"],
         "icon": c["icon"],
         "link_type": c["link_type"],
@@ -646,6 +650,23 @@ def sidebar_from_rows(rows):
 
 
 # --------------------------------------------------------------------------- dock
+def is_native_dock_item(item):
+    return item.get("type") == "item" and item.get("link_type") in NATIVE_DOCK_TYPES
+
+
+def quick_launch_dock(dock):
+    """The part of a dock design the native v16 Dock cannot hold (DocType lists, New, Report...)."""
+    dock = normalize_dock(dock)
+    items = [i for i in dock["items"] if i["type"] == "separator" or not is_native_dock_item(i)]
+    while items and items[0]["type"] == "separator":
+        items.pop(0)
+    while items and items[-1]["type"] == "separator":
+        items.pop()
+    if not any(i["type"] == "item" for i in items):
+        items = []
+    return dict(dock, items=items)
+
+
 def default_dock():
     return {
         "enabled": 1,

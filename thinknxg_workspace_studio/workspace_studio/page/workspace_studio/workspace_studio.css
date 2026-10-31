@@ -323,3 +323,12 @@ body.wss-resizing, body.wss-resizing * { cursor: ew-resize !important; user-sele
 	.wss-sb-ghost { display: none; }
 	.wss-settings { grid-template-columns: 1fr; }
 }
+
+/* v16 native navigation markers */
+.wss-banner.is-info { background: color-mix(in srgb, var(--wss-accent) 8%, var(--wss-panel)); }
+.wss-sb-row.is-auto { cursor: default; opacity: .75; border-style: dashed; border-color: var(--wss-line); }
+.wss-sb-row.is-auto .wss-sb-type { display: inline; }
+.wss-dock--preview .is-auto { cursor: default; opacity: .8; }
+.wss-dock--preview .is-auto .wss-dock-icon { outline: 2px solid var(--wss-panel); box-shadow: 0 0 0 4px color-mix(in srgb, var(--wss-accent) 35%, transparent); }
+.wss-dock--preview .is-ql .wss-dock-icon { outline: 2px dashed color-mix(in srgb, var(--wss-muted) 70%, transparent); outline-offset: 2px; }
+.wss-dock--preview .wss-dock-sep.is-ql { opacity: .5; }

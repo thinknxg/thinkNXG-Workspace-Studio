@@ -1,12 +1,18 @@
 """Publishes Studio Workspace designs into real Frappe documents and rolls them back.
 
-Targets (all introspected through DocType meta, so the publisher adapts to the
-exact v16 schema on the site and logs anything it had to skip):
-  * Workspace            - layout blocks, shortcuts, cards, charts, number cards, quick lists
-  * Workspace Sidebar    - left sidebar menu (v16)
-  * Desktop Icon         - desktop/app-screen icon (v16)
+v16 navigation (Frappe version-16, autumn 2026) is built from modules:
+
+  * Workspace        - the page, filed under the studio's own custom module
+  * Module Def       - one custom module per studio (unless the studio names one). Its sidebar is
+                       what the desk shows next to the workspace, and a dock entry opens it.
+  * Custom Sidebar   - the studio's menu, as the site layer (Shared) or per-user layers (Personal)
+  * Dock             - native per-app dock, site layer (no audience) or per-user layers (audience),
+                       merged into the existing rail unless "Replace" is chosen
   * User.default_workspace
-  * The Dock is served by this app's runtime from `published_dock_json`.
+
+Older v16 builds without `Custom Sidebar`/`Dock` fall back to `Workspace Sidebar` and
+`Desktop Icon`. Dock items the native Dock cannot hold are served by the Studio Quick Launch bar
+(`published_dock_json`). All writes are snapshotted so a publish can be rolled back.
 """
 
 import json
@@ -22,36 +28,19 @@ QUERY_REPORT_TYPES = ("Query Report", "Script Report", "Custom Report")
 STRIP_KEYS = ("creation", "modified", "modified_by", "owner", "docstatus", "idx", "_user_tags",
               "_comments", "_assign", "_liked_by", "_seen")
 CHILD_STRIP_KEYS = STRIP_KEYS + ("name", "parent", "parentfield", "parenttype")
-MANAGED_DOCTYPES = ("Workspace", "Workspace Sidebar", "Desktop Icon")
-# v16: Workspace.module is mandatory. Frappe triages pages created without one into these.
+# Documents this studio owns outright and may delete when they drop out of the audience.
+MANAGED_DOCTYPES = ("Workspace", "Workspace Sidebar", "Desktop Icon", "Custom Sidebar")
+# Everything recorded in the published index (Module Def is kept, Dock rows are removed by key).
+INDEXED_DOCTYPES = MANAGED_DOCTYPES + ("Module Def", "Dock")
 PRIVATE_MODULE = "Private"
 CUSTOM_MODULE = "Custom Workspaces"
+DEFAULT_DOCK_ICON = "data-table-soft"
+MAX_LAYER_USERS = 500
 
 
-def resolve_module(chosen, for_user):
-    """Module for a published workspace.
-
-    Private (personal) pages always live in v16's `Private` module, which is what the desk draws
-    each user's own shell from. Shared pages use the studio's module, or `Custom Workspaces`
-    when none is chosen (a shared page may not use `Private`).
-    """
-    if for_user:
-        target = PRIVATE_MODULE
-    elif chosen and chosen != PRIVATE_MODULE:
-        return chosen
-    else:
-        target = CUSTOM_MODULE
-    try:
-        from frappe.desk.doctype.workspace.workspace import triage_module
-
-        return triage_module(for_user)
-    except ImportError:
-        pass
-    if not frappe.db.exists("Module Def", target):
-        frappe.get_doc({"doctype": "Module Def", "module_name": target, "custom": 1}).insert(
-            ignore_permissions=True
-        )
-    return target
+def native_navigation():
+    """True on v16 builds that navigate by module sidebars and the layered Dock."""
+    return bool(frappe.db.exists("DocType", "Custom Sidebar") and frappe.db.exists("DocType", "Dock"))
 
 
 def slug(text):
@@ -85,8 +74,12 @@ class Publisher:
         self.snapshots = []
         self.documents = []
         self.warnings = []
-        self.owned = {(d.get("doctype"), d.get("name")) for d in schema.loads(studio.published_index, [])}
+        self.prev_index = schema.loads(studio.published_index, [])
+        self.owned = {(d.get("doctype"), d.get("name")) for d in self.prev_index}
         self.title = (studio.workspace_title or studio.title).strip()
+        self.native = native_navigation()
+        self._module = None
+        self.dock_keys = {}  # Dock name -> keys this publish placed in it
 
     # ------------------------------------------------------------------ helpers
     def warn(self, msg):
@@ -100,8 +93,8 @@ class Publisher:
             before = None
         self.snapshots.append({"doctype": doctype, "name": name, "before": before})
 
-    def record(self, doctype, name, action, route=None):
-        self.documents.append({"doctype": doctype, "name": name, "action": action, "route": route})
+    def record(self, doctype, name, action, route=None, **extra):
+        self.documents.append({"doctype": doctype, "name": name, "action": action, "route": route, **extra})
 
     def guard_ownership(self, doctype, name):
         if not frappe.db.exists(doctype, name):
@@ -130,6 +123,77 @@ class Publisher:
                 value = picked
             out[key] = value
         return out
+
+    # ------------------------------------------------------------------ module
+    def module_for(self, public, for_user):
+        """Module a published workspace is filed under."""
+        if self.native:
+            return self.ensure_module()
+        # pre-sidebar-layer builds: Frappe's own triage
+        if not public:
+            target = PRIVATE_MODULE
+        elif self.doc.module and self.doc.module != PRIVATE_MODULE:
+            return self.doc.module
+        else:
+            target = CUSTOM_MODULE
+        try:
+            from frappe.desk.doctype.workspace.workspace import triage_module
+
+            return triage_module(None if public else for_user)
+        except ImportError:
+            pass
+        if not frappe.db.exists("Module Def", target):
+            frappe.get_doc({"doctype": "Module Def", "module_name": target, "custom": 1}).insert(
+                ignore_permissions=True
+            )
+        return target
+
+    def ensure_module(self):
+        """The module that carries this studio's workspace, sidebar and dock entry.
+
+        A module the studio names is used as it is. Otherwise the studio gets its own custom
+        module named after the workspace label, created unplaced (no `app_name`) so it reaches
+        only the audience the Dock is published to.
+        """
+        if self._module:
+            return self._module
+        chosen = (self.doc.module or "").strip()
+        if chosen and chosen != PRIVATE_MODULE:
+            self._module = chosen
+            return chosen
+
+        for candidate in (self.title, f"{self.title} Workspace", f"{self.title} Studio"):
+            existing = frappe.db.get_value("Module Def", candidate, "name")
+            if existing:
+                if ("Module Def", existing) in self.owned:
+                    self._module = existing
+                    self.record("Module Def", existing, "kept")
+                    break
+                continue
+            if frappe.db.exists("DocType", "Sidebar") and frappe.db.exists("Sidebar", candidate):
+                continue
+            module = frappe.get_doc({"doctype": "Module Def", "module_name": candidate, "custom": 1})
+            # The studio supplies the page the module opens on, so skip v16's auto-created one.
+            previous = frappe.flags.in_import
+            frappe.flags.in_import = True
+            try:
+                module.insert(ignore_permissions=True)
+            finally:
+                frappe.flags.in_import = previous
+            self.snapshots.append({"doctype": "Module Def", "name": module.name, "before": None})
+            self.record("Module Def", module.name, "created")
+            self._module = module.name
+            break
+        else:
+            frappe.throw(
+                _("Could not find a free module name for {0}. Set a Module on the studio.").format(self.title)
+            )
+        if self._module != self.title:
+            self.warn(
+                f"A module called '{self.title}' already exists and belongs to something else, "
+                f"so this studio uses its own module '{self._module}'."
+            )
+        return self._module
 
     # ------------------------------------------------------------------ audience
     def target_roles(self):
@@ -187,7 +251,7 @@ class Publisher:
             "icon": self.doc.icon or None,
             "indicator_color": self.doc.indicator_color or None,
             "parent_page": (self.doc.parent_page or "") if public else "",
-            "module": resolve_module(self.doc.module, None if public else for_user),
+            "module": self.module_for(public, for_user),
             "type": "Workspace",
             "standard": 0,
             "sequence_id": self.doc.sequence_id or 0,
@@ -219,8 +283,7 @@ class Publisher:
         else:
             ws.insert(ignore_permissions=True)
 
-        route = ["private", slug(self.title)] if not public else [slug(self.title)]
-        self.record("Workspace", ws.name, action, "/app/" + "/".join(route))
+        self.record("Workspace", ws.name, action, ("/desk/" + slug(self.title)) if public else None)
         return ws.name
 
     def enrich_report_links(self, ws):
@@ -235,7 +298,7 @@ class Publisher:
                     row.report_ref_doctype = info.ref_doctype
 
     # ------------------------------------------------------------------ sidebar
-    def publish_sidebar(self, name):
+    def publish_legacy_sidebar(self, name):
         if not frappe.db.exists("DocType", "Workspace Sidebar"):
             self.warn("This site has no 'Workspace Sidebar' DocType (pre-v16), so the left menu was not published.")
             return
@@ -304,7 +367,7 @@ class Publisher:
             "label": name,
             "header_icon": self.doc.icon or None,
             "icon": self.doc.icon or None,
-            "module": resolve_module(self.doc.module, None),
+            "module": self.module_for(True, None),
         }
         sb.update(self.filter_values("Workspace Sidebar", header, "Workspace Sidebar"))
         sb.set(table_df.fieldname, [])
@@ -339,7 +402,7 @@ class Publisher:
             "link_type": link_type,
             "link_to": name if link_type in ("Workspace Sidebar", "Workspace") else None,
             "sidebar": name if link_type == "Workspace Sidebar" else None,
-            "link": "/app/" + slug(self.title),
+            "link": "/desk/" + slug(self.title),
             "idx": cint(self.doc.sequence_id),
         }
         existing = frappe.db.exists("Desktop Icon", name)
@@ -383,13 +446,145 @@ class Publisher:
         if mapping:
             self.record("User", f"{len(mapping)} user(s)", "default workspace set")
 
+    # ------------------------------------------------------------------ native sidebar (v16)
+    def sidebar_rows(self, user_roles, home):
+        """Custom Sidebar rows for one layer. The studio's workspace always comes first, so the
+        module opens on it."""
+        rows = []
+        if home:
+            rows.append(
+                {"type": "Link", "label": self.title, "link_type": "Workspace", "link_to": home,
+                 "icon": self.doc.icon or None, "child": 0, "added": 1, "open_in_new_tab": 0}
+            )
+        for r in schema.flatten_sidebar(self.sidebar, user_roles):
+            row = {"added": 1, "child": r.get("child", 0), "label": r.get("label") or "",
+                   "icon": r.get("icon") or None, "open_in_new_tab": 0}
+            if r["kind"] == "section":
+                row.update({"type": "Section Break", "collapsible": r.get("collapsible", 1),
+                            "keep_closed": r.get("keep_closed", 0), "key": "wss-" + r["id"]})
+            elif r["kind"] == "spacer":
+                row.update({"type": "Spacer", "key": "wss-" + r["id"]})
+            else:
+                if r["link_type"] == "URL":
+                    row.update({"type": "Link", "link_type": "URL", "url": r["url"], "link_to": None})
+                else:
+                    row.update({"type": "Link", "link_type": r["link_type"], "link_to": r["link_to"]})
+                if home and row.get("link_type") == "Workspace" and row.get("link_to") == home:
+                    continue
+            rows.append(row)
+        return rows
+
+    def publish_native_sidebar(self, layers):
+        """`layers` is a list of (user or None, home workspace name)."""
+        from frappe.desk.doctype.custom_sidebar.custom_sidebar import _save_customization, get_customization
+
+        module = self.ensure_module()
+        if not self.sidebar["items"]:
+            self.warn("The sidebar menu is empty; the module shows only the workspace itself.")
+        if any(user is None for user, _home in layers) and _sidebar_has_roles(self.sidebar):
+            self.warn("Sidebar items limited to roles are shown to everyone in Shared mode (each link is still permission-checked).")
+        for user, home in layers:
+            rows = self.sidebar_rows(frappe.get_roles(user) if user else None, home)
+            existing = get_customization(module, user)
+            if existing:
+                self.snapshot("Custom Sidebar", existing.name)
+            _save_customization(module, rows, user=user, label=self.title, header_icon=self.doc.icon or None)
+            layer = get_customization(module, user)
+            if not layer:
+                self.warn(f"The sidebar layer for {user or 'the site'} could not be saved.")
+                continue
+            if not existing:
+                self.snapshots.append({"doctype": "Custom Sidebar", "name": layer.name, "before": None})
+            self.record("Custom Sidebar", layer.name, "updated" if existing else "created",
+                        layer=user or "site")
+
+    # ------------------------------------------------------------------ native dock (v16)
+    def dock_app(self):
+        installed = frappe.get_installed_apps()
+        app = (self.doc.get("dock_app") or "").strip()
+        if app and app in installed:
+            return app
+        if app:
+            self.warn(f"Dock app '{app}' is not installed; using the default rail instead.")
+        return "erpnext" if "erpnext" in installed else "frappe"
+
+    def native_dock_entries(self, user_roles):
+        module = self.ensure_module()
+        entries = [{"link_type": "Sidebar", "link_to": module, "title": self.title,
+                    "icon": self.doc.icon or DEFAULT_DOCK_ICON, "hidden": 0}]
+        for it in self.dock["items"]:
+            if not schema.is_native_dock_item(it) or not schema.visible_for(it["roles"], user_roles):
+                continue
+            entry = {"link_type": it["link_type"], "title": it["label"],
+                     "icon": it["icon"] or DEFAULT_DOCK_ICON, "hidden": 0}
+            if it["link_type"] == "URL":
+                if not it["url"]:
+                    continue
+                entry["url"] = it["url"]
+            else:
+                if not it["link_to"]:
+                    continue
+                entry["link_to"] = it["link_to"]
+            entries.append(entry)
+        return entries
+
+    def publish_native_dock(self, users):
+        """`users` is None for the site layer, else the users whose own layer gets the entries."""
+        from frappe.desk.doctype.dock import dock as D
+
+        app = self.dock_app()
+        replace = (self.doc.get("dock_mode") or "").startswith("Replace")
+        if users is None and _dock_has_roles(self.dock):
+            self.warn("Dock items limited to roles are shown to everyone when there is no audience.")
+        if users:
+            self.warn(
+                f"The Dock was written to {len(users)} user layer(s) on the '{app}' rail. Those users keep "
+                "their current entries, but later site-wide Dock changes will not reach them."
+            )
+        for user in users if users is not None else [None]:
+            ours = self.native_dock_entries(frappe.get_roles(user) if user else None)
+            keys = {D.dock_key(e) for e in ours}
+            existing = D.get_dock(app, user=user)
+            if existing:
+                self.snapshot("Dock", existing.name)
+            if replace:
+                rows = ours
+            else:
+                current = D.get_user_dock(app, user) if user else []
+                if not current:
+                    current = D.resolve_app_dock(app, upto="site", gated=False)
+                rows = ours + [r for r in current if D.dock_key(r) not in keys]
+            rows = [{k: r.get(k) for k in ("link_type", "link_to", "url", "icon", "title", "hidden")} for r in rows]
+            D._save_layer(app, rows, user=user, require_visible=False)
+            layer = D.get_dock(app, user=user)
+            if not layer:
+                self.warn(f"The Dock layer for {user or 'the site'} could not be saved.")
+                continue
+            if not existing:
+                self.snapshots.append({"doctype": "Dock", "name": layer.name, "before": None})
+            self.dock_keys[layer.name] = sorted(keys)
+            self.record("Dock", layer.name, "updated" if existing else "created",
+                        layer=f"{app} / {user or 'site'}", keys=sorted(keys))
+
+    def strip_dock_keys(self, name, keys):
+        """Remove only this studio's entries from a Dock layer someone else also uses."""
+        from frappe.desk.doctype.dock import dock as D
+
+        if not frappe.db.exists("Dock", name):
+            return
+        doc = frappe.get_doc("Dock", name)
+        self.snapshot("Dock", name)
+        doc.set("items", [r for r in (doc.get("items") or []) if D.dock_key(r) not in set(keys)])
+        doc.save(ignore_permissions=True)
+        self.record("Dock", name, "entries removed")
+
     # ------------------------------------------------------------------ run
     def run(self):
         mode = self.doc.publish_mode or "Shared (Role-based)"
         roles = self.target_roles()
         users = self.target_users()
         default_map = {}
-        published = []
+        layer_homes = []  # (user or None, workspace) for sidebar layers
 
         if not self.layout["blocks"]:
             frappe.throw(_("The layout is empty. Add at least one block before publishing."))
@@ -406,38 +601,60 @@ class Publisher:
             if not roles and not users:
                 self.warn("No audience set: the shared workspace is visible to every desk user.")
             shared_name = self.upsert_workspace(self.title, True, None, roles, payload)
-            published.append(shared_name)
+            layer_homes.append((None, shared_name))
             for user in self.users_for_roles(roles):
                 default_map[user] = shared_name
             for user in users:
                 personal = self.publish_personal(user)
-                published.append(personal)
                 default_map[user] = personal
+                layer_homes.append((user, personal))
         else:
             audience = self.resolve_users()
             if not audience:
                 frappe.throw(_("Personal mode needs at least one role or user in the audience."))
-            if len(audience) > 500:
+            if len(audience) > MAX_LAYER_USERS:
                 frappe.throw(_("Personal mode would create {0} workspaces. Narrow the audience or use Shared mode.").format(len(audience)))
             for user in audience:
                 name = self.publish_personal(user)
-                published.append(name)
                 default_map[user] = name
+                layer_homes.append((user, name))
 
-        sidebar_ok = False
-        if cint(self.doc.publish_sidebar):
-            before = len(self.documents)
-            self.publish_sidebar(self.title)
-            sidebar_ok = len(self.documents) > before
-        if cint(self.doc.create_desktop_icon):
-            self.publish_desktop_icon(self.title, sidebar_ok)
+        if self.native:
+            if cint(self.doc.publish_sidebar):
+                self.publish_native_sidebar(layer_homes)
+            if cint(self.doc.enable_dock):
+                audience = None if not (roles or users) else self.resolve_users()
+                if audience is not None and not audience:
+                    self.warn("The audience resolved to no enabled users, so the Dock was not changed.")
+                elif audience is not None and len(audience) > MAX_LAYER_USERS:
+                    self.warn(f"The audience has {len(audience)} users; the Dock is only written for up to {MAX_LAYER_USERS}. Use a smaller audience or no audience (site-wide).")
+                else:
+                    self.publish_native_dock(audience)
+            if cint(self.doc.create_desktop_icon):
+                self.warn("v16 lists the studio's module on the Dock and desktop itself, so no separate Desktop Icon was created.")
+        else:
+            sidebar_ok = False
+            if cint(self.doc.publish_sidebar):
+                before = len(self.documents)
+                self.publish_legacy_sidebar(self.title)
+                sidebar_ok = len(self.documents) > before
+            if cint(self.doc.create_desktop_icon):
+                self.publish_desktop_icon(self.title, sidebar_ok)
+            if cint(self.doc.enable_dock):
+                self.warn("This build has no native Dock; dock items are shown in the Studio Quick Launch bar.")
+
         if cint(self.doc.set_as_default):
             self.set_default_workspace(default_map)
 
-        # Remove workspaces this studio created earlier that are no longer part of the audience.
-        current = {(d["doctype"], d["name"]) for d in self.documents}
-        for doctype, name in sorted(self.owned):
-            if doctype in MANAGED_DOCTYPES and (doctype, name) not in current and frappe.db.exists(doctype, name):
+        # Clean up what earlier publishes created that is no longer part of the audience.
+        current = {(d["doctype"], d["name"]) for d in self.documents if d["action"] != "removed"}
+        for entry in self.prev_index:
+            doctype, name = entry.get("doctype"), entry.get("name")
+            if (doctype, name) in current:
+                continue
+            if doctype == "Dock" and entry.get("keys"):
+                self.strip_dock_keys(name, entry["keys"])
+            elif doctype in MANAGED_DOCTYPES and frappe.db.exists(doctype, name):
                 self.snapshot(doctype, name)
                 frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
                 self.record(doctype, name, "removed")
@@ -450,11 +667,29 @@ class Publisher:
         return self.upsert_workspace(f"{self.title}-{user}", False, user, [], payload)
 
     def index(self):
-        return [
-            {"doctype": d["doctype"], "name": d["name"]}
-            for d in self.documents
-            if d["doctype"] in MANAGED_DOCTYPES and d["action"] != "removed"
-        ]
+        out, seen = [], set()
+        for d in self.documents:
+            if d["doctype"] not in INDEXED_DOCTYPES or d["action"] in ("removed", "entries removed"):
+                continue
+            if (d["doctype"], d["name"]) in seen:
+                continue
+            seen.add((d["doctype"], d["name"]))
+            entry = {"doctype": d["doctype"], "name": d["name"]}
+            if d.get("keys"):
+                entry["keys"] = d["keys"]
+            out.append(entry)
+        return out
+
+
+def _sidebar_has_roles(sidebar):
+    for it in sidebar["items"]:
+        if it.get("roles") or any(c.get("roles") for c in it.get("children") or []):
+            return True
+    return False
+
+
+def _dock_has_roles(dock):
+    return any(i.get("roles") for i in dock["items"] if schema.is_native_dock_item(i))
 
 
 # ---------------------------------------------------------------------- entry points
@@ -515,7 +750,8 @@ def publish(name):
     studio.published_summary = "\n".join(
         f"{d['doctype']}: {d['name']}" for d in publisher.documents if d["action"] != "removed"
     )
-    studio.published_dock_json = json.dumps(publisher.dock) if cint(studio.enable_dock) else ""
+    quick = schema.quick_launch_dock(publisher.dock) if publisher.native else publisher.dock
+    studio.published_dock_json = json.dumps(quick) if cint(studio.enable_dock) and quick["items"] else ""
     studio.save(ignore_permissions=True)
 
     from thinknxg_workspace_studio.runtime import clear_runtime_cache
@@ -539,6 +775,16 @@ def unpublish(name):
     def run():
         for entry in index:
             doctype, docname = entry.get("doctype"), entry.get("name")
+            if doctype == "Dock" and entry.get("keys") and frappe.db.exists("Dock", docname):
+                from frappe.desk.doctype.dock import dock as D
+
+                dock = frappe.get_doc("Dock", docname)
+                snapshots.append({"doctype": "Dock", "name": docname, "before": _jsonable(dock)})
+                keys = set(entry["keys"])
+                dock.set("items", [r for r in (dock.get("items") or []) if D.dock_key(r) not in keys])
+                dock.save(ignore_permissions=True)
+                documents.append({"doctype": "Dock", "name": docname, "action": "entries removed"})
+                continue
             if doctype not in MANAGED_DOCTYPES or not frappe.db.exists(doctype, docname):
                 continue
             snapshots.append({"doctype": doctype, "name": docname, "before": _jsonable(frappe.get_doc(doctype, docname))})

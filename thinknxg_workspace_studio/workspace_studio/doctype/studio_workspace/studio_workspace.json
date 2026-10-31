@@ -26,6 +26,8 @@
   "publish_sidebar",
   "create_desktop_icon",
   "enable_dock",
+  "dock_app",
+  "dock_mode",
   "audience_section",
   "targets",
   "publish_info_section",
@@ -99,7 +101,7 @@
    "options": "Workspace"
   },
   {
-   "description": "v16 requires a module on every workspace. Leave empty to use 'Custom Workspaces'. Personal copies always go to the 'Private' module.",
+   "description": "Leave empty: the studio gets its own module, whose sidebar is the published menu and which the Dock opens. Pick a module only to publish into an existing one.",
    "fieldname": "module",
    "fieldtype": "Link",
    "label": "Module",
@@ -149,19 +151,34 @@
    "default": "1",
    "fieldname": "publish_sidebar",
    "fieldtype": "Check",
-   "label": "Publish Left Sidebar Menu"
+   "label": "Publish Sidebar Menu"
   },
   {
    "default": "0",
    "fieldname": "create_desktop_icon",
    "fieldtype": "Check",
-   "label": "Create Desktop Icon"
+   "label": "Create Desktop Icon (pre-Dock builds only)"
   },
   {
    "default": "1",
    "fieldname": "enable_dock",
    "fieldtype": "Check",
-   "label": "Enable Dock"
+   "label": "Publish Dock"
+  },
+  {
+   "depends_on": "enable_dock",
+   "description": "App whose v16 Dock rail gets the studio's entries. Leave empty for ERPNext (or Frappe if ERPNext is not installed).",
+   "fieldname": "dock_app",
+   "fieldtype": "Data",
+   "label": "Dock App"
+  },
+  {
+   "default": "Add to the app's Dock",
+   "depends_on": "enable_dock",
+   "fieldname": "dock_mode",
+   "fieldtype": "Select",
+   "label": "Dock Mode",
+   "options": "Add to the app's Dock\nReplace the app's Dock"
   },
   {
    "fieldname": "audience_section",
@@ -255,7 +272,7 @@
    "link_fieldname": "studio"
   }
  ],
- "modified": "2026-10-31 09:00:00.000000",
+ "modified": "2026-10-31 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Workspace Studio",
  "name": "Studio Workspace",

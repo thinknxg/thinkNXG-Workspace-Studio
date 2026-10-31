@@ -36,6 +36,8 @@ class StudioWorkspace(Document):
                 "publish_sidebar",
                 "create_desktop_icon",
                 "enable_dock",
+                "dock_app",
+                "dock_mode",
             )
             if any(self.has_value_changed(f) for f in watched) or self._targets_changed():
                 self.status = "Modified"

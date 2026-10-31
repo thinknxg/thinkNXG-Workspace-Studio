@@ -23,6 +23,8 @@ PROP_FIELDS = (
     "publish_sidebar",
     "create_desktop_icon",
     "enable_dock",
+    "dock_app",
+    "dock_mode",
 )
 PACKAGE_FORMAT = "thinknxg-workspace-studio/1"
 
@@ -304,6 +306,8 @@ def get_meta_hints():
     return {
         "has_sidebar_doctype": bool(frappe.db.exists("DocType", "Workspace Sidebar")),
         "has_desktop_icon_doctype": bool(frappe.db.exists("DocType", "Desktop Icon")),
+        "native_navigation": bool(frappe.db.exists("DocType", "Custom Sidebar") and frappe.db.exists("DocType", "Dock")),
+        "installed_apps": frappe.get_installed_apps(),
         "frappe_version": frappe.__version__,
         "dock_enabled": cint(frappe.db.get_single_value("Workspace Studio Settings", "enable_dock")),
     }
