@@ -1,0 +1,67 @@
+{
+ "actions": [],
+ "creation": "2026-10-31 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enable_dock",
+  "hide_dock_on_mobile",
+  "column_break_1",
+  "dock_offset",
+  "runtime_cache_minutes"
+ ],
+ "fields": [
+  {
+   "default": "1",
+   "description": "Master switch for the Dock on every desk page.",
+   "fieldname": "enable_dock",
+   "fieldtype": "Check",
+   "label": "Enable Dock Globally"
+  },
+  {
+   "default": "0",
+   "fieldname": "hide_dock_on_mobile",
+   "fieldtype": "Check",
+   "label": "Hide Dock on Small Screens"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "14",
+   "description": "Distance of the Dock from the screen edge, in pixels.",
+   "fieldname": "dock_offset",
+   "fieldtype": "Int",
+   "label": "Dock Offset (px)"
+  },
+  {
+   "default": "10",
+   "fieldname": "runtime_cache_minutes",
+   "fieldtype": "Int",
+   "label": "Runtime Cache (minutes)"
+  }
+ ],
+ "issingle": 1,
+ "modified": "2026-10-31 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Workspace Studio",
+ "name": "Workspace Studio Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Workspace Studio Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

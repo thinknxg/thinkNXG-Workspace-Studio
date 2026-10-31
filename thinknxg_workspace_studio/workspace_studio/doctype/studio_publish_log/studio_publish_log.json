@@ -1,0 +1,120 @@
+{
+ "actions": [],
+ "autoname": "format:WSS-LOG-{#####}",
+ "creation": "2026-10-31 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "studio",
+  "action",
+  "status",
+  "column_break_1",
+  "published_on",
+  "published_by",
+  "rolled_back",
+  "details_section",
+  "documents",
+  "warnings",
+  "snapshot"
+ ],
+ "fields": [
+  {
+   "fieldname": "studio",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Studio",
+   "options": "Studio Workspace",
+   "read_only": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Action",
+   "options": "Publish\nUnpublish\nRollback",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Success\nPartial\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "published_on",
+   "fieldtype": "Datetime",
+   "label": "On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "published_by",
+   "fieldtype": "Link",
+   "label": "By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "rolled_back",
+   "fieldtype": "Check",
+   "label": "Rolled Back",
+   "read_only": 1
+  },
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "documents",
+   "fieldtype": "Long Text",
+   "label": "Documents",
+   "read_only": 1
+  },
+  {
+   "fieldname": "warnings",
+   "fieldtype": "Long Text",
+   "label": "Warnings",
+   "read_only": 1
+  },
+  {
+   "fieldname": "snapshot",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Snapshot",
+   "read_only": 1
+  }
+ ],
+ "in_create": 1,
+ "modified": "2026-10-31 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Workspace Studio",
+ "name": "Studio Publish Log",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Workspace Studio Manager"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "studio"
+}

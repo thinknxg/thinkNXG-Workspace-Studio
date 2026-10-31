@@ -1,0 +1,293 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:title",
+ "creation": "2026-10-31 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "designer_html",
+  "workspace_section",
+  "title",
+  "workspace_title",
+  "status",
+  "column_break_ws",
+  "icon",
+  "indicator_color",
+  "parent_page",
+  "module",
+  "sequence_id",
+  "publishing_section",
+  "publish_mode",
+  "priority",
+  "set_as_default",
+  "take_over_existing",
+  "column_break_pub",
+  "publish_sidebar",
+  "create_desktop_icon",
+  "enable_dock",
+  "audience_section",
+  "targets",
+  "publish_info_section",
+  "last_published_on",
+  "last_published_by",
+  "column_break_info",
+  "version",
+  "published_summary",
+  "designer_state_section",
+  "layout_json",
+  "sidebar_json",
+  "dock_json",
+  "published_dock_json",
+  "published_index"
+ ],
+ "fields": [
+  {
+   "fieldname": "designer_html",
+   "fieldtype": "HTML",
+   "label": "Designer"
+  },
+  {
+   "fieldname": "workspace_section",
+   "fieldtype": "Section Break",
+   "label": "Workspace"
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Studio Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Label users see in the desk. Must not clash with a workspace that this studio does not manage.",
+   "fieldname": "workspace_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Workspace Label"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nPublished\nModified",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ws",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "icon",
+   "fieldtype": "Icon",
+   "label": "Icon"
+  },
+  {
+   "fieldname": "indicator_color",
+   "fieldtype": "Select",
+   "label": "Indicator Color",
+   "options": "\nGreen\nCyan\nBlue\nOrange\nYellow\nGray\nRed\nPink\nPurple"
+  },
+  {
+   "fieldname": "parent_page",
+   "fieldtype": "Link",
+   "label": "Parent Workspace",
+   "options": "Workspace"
+  },
+  {
+   "description": "Leave empty for site-level workspaces. Setting a module in developer mode can export the workspace into that app's files.",
+   "fieldname": "module",
+   "fieldtype": "Link",
+   "label": "Module",
+   "options": "Module Def"
+  },
+  {
+   "fieldname": "sequence_id",
+   "fieldtype": "Float",
+   "label": "Sequence"
+  },
+  {
+   "fieldname": "publishing_section",
+   "fieldtype": "Section Break",
+   "label": "Publishing"
+  },
+  {
+   "default": "Shared (Role-based)",
+   "fieldname": "publish_mode",
+   "fieldtype": "Select",
+   "label": "Publish Mode",
+   "options": "Shared (Role-based)\nPersonal (Per User)"
+  },
+  {
+   "default": "10",
+   "description": "When several published studios match a user, the higher priority wins for the Dock and default workspace.",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "label": "Priority"
+  },
+  {
+   "default": "0",
+   "fieldname": "set_as_default",
+   "fieldtype": "Check",
+   "label": "Set as Default Workspace for Audience"
+  },
+  {
+   "default": "0",
+   "fieldname": "take_over_existing",
+   "fieldtype": "Check",
+   "label": "Allow replacing an existing workspace with the same label"
+  },
+  {
+   "fieldname": "column_break_pub",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "publish_sidebar",
+   "fieldtype": "Check",
+   "label": "Publish Left Sidebar Menu"
+  },
+  {
+   "default": "0",
+   "fieldname": "create_desktop_icon",
+   "fieldtype": "Check",
+   "label": "Create Desktop Icon"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_dock",
+   "fieldtype": "Check",
+   "label": "Enable Dock"
+  },
+  {
+   "fieldname": "audience_section",
+   "fieldtype": "Section Break",
+   "label": "Audience"
+  },
+  {
+   "fieldname": "targets",
+   "fieldtype": "Table",
+   "label": "Roles and Users",
+   "options": "Studio Target"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "publish_info_section",
+   "fieldtype": "Section Break",
+   "label": "Publish Info"
+  },
+  {
+   "fieldname": "last_published_on",
+   "fieldtype": "Datetime",
+   "label": "Last Published On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_published_by",
+   "fieldtype": "Link",
+   "label": "Last Published By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_info",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "version",
+   "fieldtype": "Int",
+   "label": "Published Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "published_summary",
+   "fieldtype": "Small Text",
+   "label": "Published Documents",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "designer_state_section",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Designer State"
+  },
+  {
+   "fieldname": "layout_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Layout State"
+  },
+  {
+   "fieldname": "sidebar_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Sidebar State"
+  },
+  {
+   "fieldname": "dock_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Dock State"
+  },
+  {
+   "fieldname": "published_dock_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Published Dock"
+  },
+  {
+   "fieldname": "published_index",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Published Index"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [
+  {
+   "link_doctype": "Studio Publish Log",
+   "link_fieldname": "studio"
+  }
+ ],
+ "modified": "2026-10-31 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Workspace Studio",
+ "name": "Studio Workspace",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "export": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Workspace Studio Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}
