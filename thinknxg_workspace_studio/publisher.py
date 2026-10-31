@@ -203,19 +203,37 @@ class Publisher:
         return [t.user for t in self.doc.targets if t.target_type == "User" and t.user]
 
     def users_for_roles(self, roles):
+        """Enabled desk users holding any of `roles`.
+
+        v16 never stores its automatic roles on a user: "Desk User" and "All" mean every desk
+        user, "Administrator" means the Administrator account. Administrator is otherwise
+        included only when the role is explicitly assigned to it.
+        """
         if not roles:
             return []
-        parents = frappe.get_all(
-            "Has Role", filters={"role": ["in", roles], "parenttype": "User"}, pluck="parent", distinct=True
-        )
-        if not parents:
-            return []
-        users = frappe.get_all(
-            "User",
-            filters={"name": ["in", parents], "enabled": 1, "user_type": "System User"},
-            pluck="name",
-        )
-        return [u for u in users if u not in ("Administrator", "Guest")]
+        everyone = {"Desk User", "All"} & set(roles)
+        stored = [r for r in roles if r not in ("Desk User", "All", "Guest", "Administrator")]
+        filters = {"enabled": 1, "user_type": "System User"}
+        if everyone:
+            users = frappe.get_all("User", filters=filters, pluck="name")
+        else:
+            parents = (
+                frappe.get_all(
+                    "Has Role", filters={"role": ["in", stored], "parenttype": "User"}, pluck="parent", distinct=True
+                )
+                if stored
+                else []
+            )
+            users = frappe.get_all("User", filters={**filters, "name": ["in", parents]}, pluck="name") if parents else []
+        if "Administrator" in roles and "Administrator" not in users:
+            users.append("Administrator")
+        users = [u for u in users if u != "Guest"]
+        if not users:
+            self.warn(
+                "No enabled desk user holds the audience role(s): " + ", ".join(roles)
+                + ". Assign the role to at least one user, or add users individually."
+            )
+        return users
 
     def resolve_users(self):
         users = self.users_for_roles(self.target_roles())
@@ -625,7 +643,7 @@ class Publisher:
             if cint(self.doc.enable_dock):
                 audience = None if not (roles or users) else self.resolve_users()
                 if audience is not None and not audience:
-                    self.warn("The audience resolved to no enabled users, so the Dock was not changed.")
+                    self.warn("The audience has no enabled users yet, so the Dock was not changed. Assign the role(s) to users and publish again.")
                 elif audience is not None and len(audience) > MAX_LAYER_USERS:
                     self.warn(f"The audience has {len(audience)} users; the Dock is only written for up to {MAX_LAYER_USERS}. Use a smaller audience or no audience (site-wide).")
                 else:
