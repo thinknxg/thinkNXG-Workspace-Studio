@@ -1,7 +1,7 @@
 # thinkNXG Workspace Studio
 
-A visual, drag-and-drop designer for **workspaces, left sidebar menus and the Dock** on thinkNXG ERP / Frappe v16.
-Administrators design a personalised workspace for specific **roles or users**, then publish it as real Frappe
+A visual, drag-and-drop designer for **workspaces, left sidebar menus and the Dock** on thinkNXG ERP v16.
+Administrators design a personalised workspace for specific **roles or users**, then publish it as real thinkNXG
 documents. Nobody edits Config, Navigation or Dock JSON — everything is edited in structured property panels.
 
 Publisher: Kreatao · License: MIT · App name: `thinknxg_workspace_studio`
@@ -26,7 +26,7 @@ Open **/app/workspace-studio** (also on the v16 apps screen). Access is for **Sy
 | Area | What it does |
 |---|---|
 | **Layout canvas** | 12-column grid. Drag Header, Text, Spacer, Shortcut, Link Card, Quick List, Number Card, Chart and Custom HTML blocks (plus ready-made patterns) from the palette. Drag to reorder, drag the right edge to resize, desktop / tablet / mobile preview. |
-| **Property panel** | Typed fields per block (Link pickers for DocType, Report, Page, Dashboard Chart, Number Card, Custom HTML Block), width presets, colour, view, count/list **filter builder** (Frappe FilterGroup), card link list with drag-reorder and bulk DocType add. |
+| **Property panel** | Typed fields per block (Link pickers for DocType, Report, Page, Dashboard Chart, Number Card, Custom HTML Block), width presets, colour, view, count/list **filter builder** (thinkNXG FilterGroup), card link list with drag-reorder and bulk DocType add. |
 | **Block visibility** | Each block can be limited to roles (enforced per user in Personal mode). |
 | **Sidebar Menu** | Tree builder: sections, links and dividers. Drop a link onto the middle of a section to nest it. One-click *Generate from layout*. |
 | **Dock** | Native v16 Dock entries (Module, Workspace, URL) published to an app rail, plus a Studio Quick Launch bar for DocType lists, New document, Report, Page and Dashboard (bottom / left / right, glass / solid / minimal, magnify, labels). Icon, colour and role visibility per item. |
@@ -49,9 +49,9 @@ v16 builds the desk from **modules**: a module's sidebar is the menu shown next 
   in Shared mode and one layer per user in Personal mode. The studio's workspace is always the first
   item, so the module opens on it.
 * **Dock** — published to the native v16 **Dock** of the chosen app rail:
-  * **App rail**: ERPNext by default (else Frappe), any installed app, or the custom
+  * **App rail**: thinkNXG ERP by default (else thinkNXG), any installed app, or the custom
     **Workspaces** app (this app, `thinknxg_workspace_studio`), which gives studios their own app
-    tile, rail and optional desktop icon instead of sharing ERPNext's. Managers see the Studio
+    tile, rail and optional desktop icon instead of sharing thinkNXG ERP's. Managers see the Studio
     designer on the Workspaces rail; audience users see their workspaces. The app is shown to
     managers and to anyone a studio published its Dock for.
   * **Layers**: no audience → the site layer; audience (roles and/or users) → one user layer per
@@ -62,7 +62,7 @@ v16 builds the desk from **modules**: a module's sidebar is the menu shown next 
     (setting, on by default). Add them as individual users to include them.
   * **Add** (default) keeps every native entry. On another app's rail the studio's entries go
     *after* the native ones, because an app's tile and desktop icon open the first entry of its
-    rail — so the ERPNext tile keeps opening ERPNext however many studios are published. On the
+    rail — so the thinkNXG ERP tile keeps opening thinkNXG ERP however many studios are published. On the
     Workspaces app they go first.
   * **Replace** shows only the studio's entries, and only on audience users' own layers: it never
     rewrites another app's site-wide rail, so everyone else keeps the native Dock.
@@ -100,8 +100,8 @@ Run the pure tests: `python -m unittest thinknxg_workspace_studio.tests.test_sch
 ## Notes for v16
 
 * **Module**: v16 requires one on every Workspace. If the studio leaves it empty, shared workspaces go to
-  `Custom Workspaces` and personal copies to `Private` (Frappe's own triage modules, created if missing).
+  `Custom Workspaces` and personal copies to `Private` (thinkNXG's own triage modules, created if missing).
   Published workspaces are saved with `standard = 0`, so developer mode never exports them into app files.
 * Publishing runs as Administrator after checking the caller has System Manager or Workspace Studio Manager, because
-  Frappe only lets the *Workspace Manager* role save public workspaces.
+  thinkNXG only lets the *Workspace Manager* role save public workspaces.
 * Designer state is kept in hidden fields on **Studio Workspace**; the form shows an *Open Designer* button instead.

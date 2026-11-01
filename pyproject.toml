@@ -3,7 +3,7 @@ name = "thinknxg_workspace_studio"
 authors = [
     { name = "Kreatao", email = "kreataothinkcadd@gmail.com" }
 ]
-description = "thinkNXG Workspace Studio - visual drag-and-drop workspace, sidebar and dock designer for thinkNXG ERP / Frappe v16"
+description = "thinkNXG Workspace Studio - visual drag-and-drop workspace, sidebar and dock designer for thinkNXG ERP v16"
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]

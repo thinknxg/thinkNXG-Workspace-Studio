@@ -1,7 +1,7 @@
 """'Check a user': replay the v16 boot as one user and report every gate between a published
 studio and what that user sees (workspace, module sidebar, Dock rail, home page).
 
-It calls Frappe's own boot functions as that user, so the answer is what the desk computes, and
+It calls thinkNXG's own boot functions as that user, so the answer is what the desk computes, and
 any exception raised along the way (for example by another app's permission hook) is reported
 with its traceback instead of being lost.
 """
@@ -66,7 +66,7 @@ def check_user(studio_name, user):
     )
     if module:
         placement = frappe.db.get_value("Module Def", module, "app_name")
-        rep.add("Studio module is placed in the Dock app", placement == app, f"{module} → app_name = {placement or '(none)'}; Dock app = {app}")
+        rep.add("Studio module is placed in the Dock app", placement == app, f"{module} → app_name = {placement or '(none)'}; Dock app = {schema.app_label(app)} ({app})")
     rep.add(
         "Default workspace",
         not cint(studio.set_as_default) or u.default_workspace == expected_ws,
@@ -121,14 +121,14 @@ def check_user(studio_name, user):
             rails = resolve_dock()
             rail = rails.get(app)
             if rail is None:
-                return False, f"No resolved '{app}' rail for this user (apps with rails: {', '.join(rails) or 'none'})"
+                return False, f"No resolved {schema.app_label(app)} rail for this user (apps with rails: {', '.join(schema.app_label(a) for a in rails) or 'none'})"
             key = dock_key({"link_type": "Workspace", "link_to": expected_ws})
             found = next((r for r in rail if dock_key(r) == key), None)
             if not found:
-                return False, f"The pin for {expected_ws} is not on the '{app}' rail ({len(rail)} entries)"
+                return False, f"The pin for {expected_ws} is not on the {schema.app_label(app)} rail ({len(rail)} entries)"
             if found.get("hidden"):
                 return False, "The pin is on the rail but hidden"
-            return True, f"On the '{app}' rail ({len(rail)} entries)"
+            return True, f"On the {schema.app_label(app)} rail ({len(rail)} entries)"
 
         explicit = {t.user for t in studio.targets if t.target_type == "User"}
         manager = user == "Administrator" or "System Manager" in roles
@@ -168,7 +168,7 @@ def check_user(studio_name, user):
             from frappe.boot import get_app_data
 
             names = [a.get("app_name") for a in get_app_data()]
-            return (app in names, f"Apps the user can open: {', '.join(names)}")
+            return (app in names, f"Apps the user can open: {', '.join(schema.app_label(n) for n in names)}")
 
         rep.run("User can open the Dock app", apps)
 
@@ -184,4 +184,4 @@ def check_user(studio_name, user):
         frappe.set_user(actor)
         _reset_request_caches()
 
-    return {"rows": rep.rows, "workspace": expected_ws, "module": module, "app": app, "mode": "Personal" if personal else "Shared"}
+    return {"rows": rep.rows, "workspace": expected_ws, "module": module, "app": schema.app_label(app), "mode": "Personal" if personal else "Shared"}

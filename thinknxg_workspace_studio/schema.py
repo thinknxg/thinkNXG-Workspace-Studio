@@ -1,4 +1,4 @@
-"""Pure transforms between the Workspace Studio designer state and Frappe Workspace payloads.
+"""Pure transforms between the Workspace Studio designer state and thinkNXG Workspace payloads.
 
 Nothing in this module imports frappe, so it can be unit-tested outside a bench.
 
@@ -53,6 +53,18 @@ FILTER_OPERATORS = (
     "=", "!=", ">", "<", ">=", "<=", "like", "not like", "in", "not in",
     "is", "between", "timespan", "descendants of", "ancestors of",
 )
+
+
+# Brand names shown to users for installed app IDs. IDs themselves never change.
+APP_LABELS = {
+    "frappe": "thinkNXG",
+    "erpnext": "thinkNXG ERP",
+    "thinknxg_workspace_studio": "Workspaces",
+}
+
+
+def app_label(app):
+    return APP_LABELS.get(app, app or "")
 
 
 # --------------------------------------------------------------------------- helpers

@@ -1,7 +1,7 @@
 app_name = "thinknxg_workspace_studio"
 app_title = "thinkNXG Workspace Studio"
 app_publisher = "Kreatao"
-app_description = "Visual drag-and-drop designer for workspaces, left sidebar menus and the Dock on thinkNXG ERP / Frappe v16"
+app_description = "Visual drag-and-drop designer for workspaces, left sidebar menus and the Dock on thinkNXG ERP v16"
 app_email = "kreataothinkcadd@gmail.com"
 app_license = "MIT"
 app_icon = "/assets/thinknxg_workspace_studio/images/logo.svg"
@@ -10,7 +10,7 @@ app_color = "#4f46e5"
 required_apps = ["frappe"]
 
 # Workspace Studio is also a v16 Dock app ("Workspaces"): studios can publish to its rail instead
-# of ERPNext's. Managers see the Studio designer on it; audience users see their workspaces. The
+# of thinkNXG ERP's. Managers see the Studio designer on it; audience users see their workspaces. The
 # tile, rail and desktop icon open the first entry of the user's rail.
 add_to_apps_screen = [
     {

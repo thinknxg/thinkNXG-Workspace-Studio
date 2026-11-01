@@ -168,7 +168,7 @@
   },
   {
    "depends_on": "enable_dock",
-   "description": "App rail that gets the studio's Dock entries: an installed app name (default erpnext), or thinknxg_workspace_studio for the custom 'Workspaces' app.",
+   "description": "App rail that gets the studio's Dock entries: an installed app ID. Empty = thinkNXG ERP (erpnext), else thinkNXG (frappe). Use thinknxg_workspace_studio for the custom 'Workspaces' app.",
    "fieldname": "dock_app",
    "fieldtype": "Data",
    "label": "Dock App"
@@ -180,7 +180,7 @@
    "fieldtype": "Select",
    "label": "Dock Mode",
    "options": "Add to the app's Dock\nReplace the app's Dock",
-   "description": "Add keeps the rail's entries (studio entries go after ERPNext's). Replace shows only the studio's entries, for audience users only."
+   "description": "Add keeps the rail's entries (studio entries go after thinkNXG ERP's). Replace shows only the studio's entries, for audience users only."
   },
   {
    "fieldname": "audience_section",

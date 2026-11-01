@@ -1,6 +1,6 @@
-"""Publishes Studio Workspace designs into real Frappe documents and rolls them back.
+"""Publishes Studio Workspace designs into real thinkNXG documents and rolls them back.
 
-v16 navigation (Frappe version-16, autumn 2026) is built from modules:
+v16 navigation (thinkNXG version-16, autumn 2026) is built from modules:
 
   * Workspace        - the page, filed under the studio's own custom module
   * Module Def       - one custom module per studio (unless the studio names one). Its sidebar is
@@ -35,7 +35,7 @@ INDEXED_DOCTYPES = MANAGED_DOCTYPES + ("Module Def", "Dock")
 PRIVATE_MODULE = "Private"
 CUSTOM_MODULE = "Custom Workspaces"
 DEFAULT_DOCK_ICON = "data-table-soft"
-# Workspace Studio is itself a v16 Dock app ("Workspaces"), usable instead of ERPNext's rail.
+# Workspace Studio is itself a v16 Dock app ("Workspaces"), usable instead of thinkNXG ERP's rail.
 STUDIO_APP = "thinknxg_workspace_studio"
 STUDIO_APP_TITLE = "Workspaces"
 
@@ -140,7 +140,7 @@ class Publisher:
         """Module a published workspace is filed under."""
         if self.native:
             return self.ensure_module()
-        # pre-sidebar-layer builds: Frappe's own triage
+        # pre-sidebar-layer builds: thinkNXG's own triage
         if not public:
             target = PRIVATE_MODULE
         elif self.doc.module and self.doc.module != PRIVATE_MODULE:
@@ -554,7 +554,7 @@ class Publisher:
         if app and app in installed:
             return app
         if app:
-            self.warn(f"Dock app '{app}' is not installed; using the default rail instead.")
+            self.warn(f"Dock app '{app}' is not installed; using the default rail ({schema.app_label('erpnext') if 'erpnext' in installed else schema.app_label('frappe')}) instead.")
         return "erpnext" if "erpnext" in installed else "frappe"
 
     def native_dock_entries(self, user_roles, home):
@@ -609,7 +609,7 @@ class Publisher:
     def publish_native_dock(self, layers):
         """`layers` is [(user or None, workspace)].
 
-        * Merge (default): the rail keeps every entry it had. On another app's rail (ERPNext)
+        * Merge (default): the rail keeps every entry it had. On another app's rail (thinkNXG ERP)
           the studio's entries go *after* the native ones, because an app's tile and desktop icon
           open the first entry of its rail. On the Workspaces app they go first.
         * Replace: the user's rail holds only the studio's entries. Never applied to another
@@ -635,7 +635,7 @@ class Publisher:
         user_layers = [u for u, _w in layers if u]
         if user_layers and not replace:
             self.warn(
-                f"The Dock was written to {len(user_layers)} user layer(s) on the '{app}' rail. Those users keep "
+                f"The Dock was written to {len(user_layers)} user layer(s) on the {schema.app_label(app)} rail. Those users keep "
                 "their current entries, but later site-wide Dock changes will not reach them until they leave the audience."
             )
         for user, home in layers:
@@ -643,7 +643,7 @@ class Publisher:
             if replace and user is None and not own_app:
                 replace_this = False
                 self.warn(
-                    f"Replace mode never rewrites the site-wide '{app}' rail (everyone would lose it). "
+                    f"Replace mode never rewrites the site-wide {schema.app_label(app)} rail (everyone would lose it). "
                     "Set an audience to replace the rail for those users only; the entries were merged instead."
                 )
             ours = self.native_dock_entries(frappe.get_roles(user) if user else None, home)
@@ -674,7 +674,7 @@ class Publisher:
             if not existing:
                 self.snapshots.append({"doctype": "Dock", "name": layer.name, "before": None})
             self.record("Dock", layer.name, "updated" if existing else "created",
-                        layer=f"{app} / {user or 'site'}", keys=sorted(keys), created=1 if created else 0)
+                        layer=f"{schema.app_label(app)} / {user or 'site'}", keys=sorted(keys), created=1 if created else 0)
 
     def ensure_app_desktop_icon(self):
         """Desktop icon (v16 Desktop Icon grid) for the Workspaces app. The Apps screen tile comes
@@ -774,7 +774,7 @@ class Publisher:
                 if self.dock_app() == STUDIO_APP:
                     self.ensure_app_desktop_icon()
                 else:
-                    self.warn(f"Desktop icons are added for the Workspaces app only; '{self.dock_app()}' already has its own.")
+                    self.warn(f"Desktop icons are added for the Workspaces app only; {schema.app_label(self.dock_app())} already has its own.")
         else:
             sidebar_ok = False
             if cint(self.doc.publish_sidebar):

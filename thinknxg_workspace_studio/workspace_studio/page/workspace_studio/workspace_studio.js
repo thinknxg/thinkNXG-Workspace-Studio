@@ -218,7 +218,7 @@ frappe.provide("wss");
 		}, 500);
 	}
 
-	// Structured form helper: a Frappe FieldGroup whose changes stream back into designer state.
+	// Structured form helper: a thinkNXG FieldGroup whose changes stream back into designer state.
 	function make_form($parent, fields, values, on_change) {
 		$parent.empty();
 		let ready = false;
@@ -2012,10 +2012,8 @@ frappe.provide("wss");
 				const opt = (arr) => arr.map(([v, l]) => ({ value: v, label: l }));
 				if (this.hints.native_navigation !== false) {
 					$i.find(".wss-ins-form").before(`<div class="wss-ins-section"><div class="wss-ins-label">${__("v16 Dock")}</div><div data-form="native"></div></div>`);
-					const apps = (this.hints.installed_apps || []).map((a) => ({
-						value: a,
-						label: a === "thinknxg_workspace_studio" ? __("Workspaces (custom Dock app)") : a,
-					}));
+					const brand = { frappe: "thinkNXG", erpnext: "thinkNXG ERP", thinknxg_workspace_studio: __("Workspaces (custom Dock app)") };
+					const apps = (this.hints.installed_apps || []).map((a) => ({ value: a, label: brand[a] || a }));
 					make_form(
 						$i.find("[data-form=native]"),
 						[
@@ -2024,8 +2022,8 @@ frappe.provide("wss");
 								fieldtype: "Select",
 								fieldname: "dock_app",
 								label: __("App rail"),
-								options: [{ value: "", label: __("Default (ERPNext, else Frappe)") }].concat(apps),
-								description: __("Pick 'Workspaces' to give studios their own app, tile and rail instead of sharing ERPNext's."),
+								options: [{ value: "", label: __("Default (thinkNXG ERP, else thinkNXG)") }].concat(apps),
+								description: __("Pick 'Workspaces' to give studios their own app, tile and rail instead of sharing thinkNXG ERP's."),
 							},
 							{
 								fieldtype: "Select",
@@ -2035,7 +2033,7 @@ frappe.provide("wss");
 									{ value: "Add to the app's Dock", label: __("Add to the existing rail") },
 									{ value: "Replace the app's Dock", label: __("Replace the rail with these entries") },
 								],
-								description: __("Add keeps every native entry (studio entries go after ERPNext's, so the ERPNext tile still opens ERPNext). Replace applies to audience users only; everyone else keeps the native rail."),
+								description: __("Add keeps every native entry (studio entries go after thinkNXG ERP's, so the thinkNXG ERP tile still opens thinkNXG ERP). Replace applies to audience users only; everyone else keeps the native rail."),
 							},
 							{
 								fieldtype: "Check",
