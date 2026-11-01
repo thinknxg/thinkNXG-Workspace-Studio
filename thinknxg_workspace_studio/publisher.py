@@ -151,8 +151,10 @@ class Publisher:
         """The module that carries this studio's workspace, sidebar and dock entry.
 
         A module the studio names is used as it is. Otherwise the studio gets its own custom
-        module named after the workspace label, created unplaced (no `app_name`) so it reaches
-        only the audience the Dock is published to.
+        module named after the workspace label, placed in the Dock app (`app_name`). v16 draws
+        the rail of the app that owns the sidebar on screen, so an unplaced module shows no Dock
+        at all on its own workspace. Placing it does not list it for everyone: once a Dock layer
+        is saved, only the entries that layer names are shown.
         """
         if self._module:
             return self._module
@@ -166,12 +168,15 @@ class Publisher:
             if existing:
                 if ("Module Def", existing) in self.owned:
                     self._module = existing
+                    self.place_module(existing)
                     self.record("Module Def", existing, "kept")
                     break
                 continue
             if frappe.db.exists("DocType", "Sidebar") and frappe.db.exists("Sidebar", candidate):
                 continue
-            module = frappe.get_doc({"doctype": "Module Def", "module_name": candidate, "custom": 1})
+            module = frappe.get_doc(
+                {"doctype": "Module Def", "module_name": candidate, "custom": 1, "app_name": self.dock_app()}
+            )
             # The studio supplies the page the module opens on, so skip v16's auto-created one.
             previous = frappe.flags.in_import
             frappe.flags.in_import = True
@@ -193,6 +198,15 @@ class Publisher:
                 f"so this studio uses its own module '{self._module}'."
             )
         return self._module
+
+    def place_module(self, module):
+        """Keep the studio's own module placed in the current Dock app."""
+        app = self.dock_app()
+        if frappe.db.get_value("Module Def", module, "app_name") == app:
+            return
+        self.snapshot("Module Def", module)
+        frappe.db.set_value("Module Def", module, "app_name", app)
+        frappe.clear_cache()
 
     # ------------------------------------------------------------------ audience
     def target_roles(self):
@@ -517,6 +531,12 @@ class Publisher:
 
     # ------------------------------------------------------------------ native dock (v16)
     def dock_app(self):
+        if getattr(self, "_dock_app", None):
+            return self._dock_app
+        self._dock_app = self._resolve_dock_app()
+        return self._dock_app
+
+    def _resolve_dock_app(self):
         installed = frappe.get_installed_apps()
         app = (self.doc.get("dock_app") or "").strip()
         if app and app in installed:
