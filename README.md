@@ -48,19 +48,31 @@ v16 builds the desk from **modules**: a module's sidebar is the menu shown next 
 * **Sidebar menu** — published as a **Custom Sidebar** layer on the studio's module: the site layer
   in Shared mode and one layer per user in Personal mode. The studio's workspace is always the first
   item, so the module opens on it.
-* **Dock** — published to the native **Dock** of the chosen app rail (default ERPNext, else Frappe),
-  following the workspace:
-  * **Shared** mode → one site-wide entry pinning the shared workspace. v16 shows a Workspace pin only
-    to users who can open it, so it reaches exactly the audience roles. Users added individually get
-    their own Dock layer pinned to their personal copy.
-  * **Personal** mode → each user's own Dock layer, pinned to their personal copy.
-  * Opening the pin opens the workspace with the studio's sidebar beside it.
-  * **Add** mode (default) keeps the rail's existing entries and puts the studio's entries first;
-    **Replace** mode leaves only the studio's entries. Re-publishing replaces the studio's previous
-    entries rather than duplicating them.
-  * Extra designer items of type Module, Workspace and URL go to the native Dock; items it cannot
-    hold (DocType list, New document, Report, Page, Dashboard) are shown in the Studio **Quick
-    Launch bar** (`app_include_js`), styled in the Dock tab.
+* **Dock** — published to the native v16 **Dock** of the chosen app rail:
+  * **App rail**: ERPNext by default (else Frappe), any installed app, or the custom
+    **Workspaces** app (this app, `thinknxg_workspace_studio`), which gives studios their own app
+    tile, rail and optional desktop icon instead of sharing ERPNext's. Managers see the Studio
+    designer on the Workspaces rail; audience users see their workspaces. The app is shown to
+    managers and to anyone a studio published its Dock for.
+  * **Layers**: no audience → the site layer; audience (roles and/or users) → one user layer per
+    audience member, pinned to that member's workspace (shared or personal). v16 has no role layer,
+    so role audiences are materialised per user, and a user's role change republishes the affected
+    studios automatically (Workspace Studio Settings).
+  * **Administrator / System Managers** reached only through a role keep their native Dock
+    (setting, on by default). Add them as individual users to include them.
+  * **Add** (default) keeps every native entry. On another app's rail the studio's entries go
+    *after* the native ones, because an app's tile and desktop icon open the first entry of its
+    rail — so the ERPNext tile keeps opening ERPNext however many studios are published. On the
+    Workspaces app they go first.
+  * **Replace** shows only the studio's entries, and only on audience users' own layers: it never
+    rewrites another app's site-wide rail, so everyone else keeps the native Dock.
+  * A layer the studio created is deleted when its user leaves the audience (or on unpublish), so
+    that user gets the native rail back; on layers that existed before, only the studio's entries
+    are removed. Re-publishing replaces the studio's previous entries instead of duplicating them.
+  * **Home**: a Home button at the top of the Dock on every app's rail opens the user's default
+    workspace (or the desk's home module). No Dock layers are written for it.
+  * Designer items of type Module, Workspace and URL go to the native Dock; items it cannot hold
+    (DocType list, New document, Report, Page, Dashboard) are shown in the Studio **Quick Launch bar**.
 * **Default workspace** — sets `User.default_workspace` for the audience when enabled.
 * **Safety** — the publisher refuses to overwrite a workspace it doesn't manage unless *Allow
   replacing an existing workspace* is ticked. Every Publish/Unpublish stores a snapshot in **Studio

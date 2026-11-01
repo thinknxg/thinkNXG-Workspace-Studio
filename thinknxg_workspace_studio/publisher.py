@@ -35,6 +35,18 @@ INDEXED_DOCTYPES = MANAGED_DOCTYPES + ("Module Def", "Dock")
 PRIVATE_MODULE = "Private"
 CUSTOM_MODULE = "Custom Workspaces"
 DEFAULT_DOCK_ICON = "data-table-soft"
+# Workspace Studio is itself a v16 Dock app ("Workspaces"), usable instead of ERPNext's rail.
+STUDIO_APP = "thinknxg_workspace_studio"
+STUDIO_APP_TITLE = "Workspaces"
+
+
+def studio_setting(field, default):
+    """Single-value setting that may not exist yet (before migrate)."""
+    try:
+        value = frappe.db.get_single_value("Workspace Studio Settings", field)
+    except Exception:
+        return default
+    return default if value is None else value
 MAX_LAYER_USERS = 500
 
 
@@ -567,55 +579,137 @@ class Publisher:
             entries.append(entry)
         return entries
 
+    def dock_layers(self, shared_name, default_map):
+        """Which Dock layers to write: the site layer when there is no audience, otherwise one
+        user layer per audience member pinned to that member's workspace (shared or personal).
+        Administrator and System Managers that reach the audience only through a role are left
+        alone unless the setting says otherwise, so their native rail never changes."""
+        if not (self.target_roles() or self.target_users()):
+            return [(None, shared_name)] if shared_name else []
+        explicit = set(self.target_users())
+        exclude = cint(studio_setting("exclude_managers_from_dock", 1))
+        layers, skipped = [], []
+        for user, workspace in default_map.items():
+            if exclude and user not in explicit and (
+                user == "Administrator" or "System Manager" in frappe.get_roles(user)
+            ):
+                skipped.append(user)
+                continue
+            layers.append((user, workspace))
+        if skipped:
+            self.warn(
+                f"The Dock of {len(skipped)} Administrator/System Manager account(s) was left unchanged. "
+                "Add them as individual users to include them."
+            )
+        if len(layers) > MAX_LAYER_USERS:
+            self.warn(f"The audience has {len(layers)} users; the Dock is only written for the first {MAX_LAYER_USERS}.")
+            layers = layers[:MAX_LAYER_USERS]
+        return layers
+
     def publish_native_dock(self, layers):
-        """Follow the workspace: `layers` is [(user or None, workspace)], the same list the
-        sidebar uses. Shared mode writes the site layer (v16 only shows the entry to users who
-        can open the shared workspace, i.e. its audience roles); Personal mode, and users given
-        individually in Shared mode, get their own layer pinned to their personal copy."""
+        """`layers` is [(user or None, workspace)].
+
+        * Merge (default): the rail keeps every entry it had. On another app's rail (ERPNext)
+          the studio's entries go *after* the native ones, because an app's tile and desktop icon
+          open the first entry of its rail. On the Workspaces app they go first.
+        * Replace: the user's rail holds only the studio's entries. Never applied to another
+          app's site-wide rail, so users outside the audience keep their native Dock.
+        * A layer the studio created is deleted when its user leaves the audience, so the user
+          gets the native rail back exactly.
+        """
         from frappe.desk.doctype.dock import dock as D
 
         app = self.dock_app()
+        own_app = app == STUDIO_APP
         replace = (self.doc.get("dock_mode") or "").startswith("Replace")
-        # every entry this studio placed on any layer last time; a new layer may be seeded from
-        # a rail that still carries them (e.g. switching Shared -> Personal)
-        previous_keys = set()
+        previous_keys, previous_created = set(), set()
         for e in self.prev_index:
             if e.get("doctype") == "Dock":
                 previous_keys.update(e.get("keys") or [])
-        user_layers = [u for u, _home in layers if u]
-        if any(u is None for u, _home in layers) and _dock_has_roles(self.dock):
-            self.warn("Extra Dock items limited to roles are shown to everyone on the shared Dock (the workspace pin itself follows the workspace's roles).")
-        if user_layers:
+                if e.get("created"):
+                    previous_created.add(e["name"])
+        if not layers:
+            return
+        if any(u is None for u, _w in layers) and _dock_has_roles(self.dock):
+            self.warn("Extra Dock items limited to roles are shown to everyone on the site-wide Dock (the workspace pin itself follows the workspace's roles).")
+        user_layers = [u for u, _w in layers if u]
+        if user_layers and not replace:
             self.warn(
                 f"The Dock was written to {len(user_layers)} user layer(s) on the '{app}' rail. Those users keep "
-                "their current entries, but later site-wide Dock changes will not reach them."
+                "their current entries, but later site-wide Dock changes will not reach them until they leave the audience."
             )
         for user, home in layers:
+            replace_this = replace
+            if replace and user is None and not own_app:
+                replace_this = False
+                self.warn(
+                    f"Replace mode never rewrites the site-wide '{app}' rail (everyone would lose it). "
+                    "Set an audience to replace the rail for those users only; the entries were merged instead."
+                )
             ours = self.native_dock_entries(frappe.get_roles(user) if user else None, home)
             keys = {D.dock_key(e) for e in ours}
             existing = D.get_dock(app, user=user)
             if existing:
                 self.snapshot("Dock", existing.name)
-            if replace:
+            if replace_this:
                 rows = ours
+                if own_app:
+                    # keep the designer's own entry so managers can still reach the Studio
+                    below = D.resolve_app_dock(app, upto="site", gated=False)
+                    rows = ours + [r for r in below if r.get("link_type") == "Sidebar" and r.get("link_to") == "Workspace Studio"]
             else:
                 current = D.get_user_dock(app, user) if user else []
                 if not current:
                     current = D.resolve_app_dock(app, upto="site", gated=False)
-                # drop this studio's entries from the last publish too, so renamed or removed
-                # items do not linger next to the new ones
                 stale = keys | previous_keys
-                rows = ours + [r for r in current if D.dock_key(r) not in stale]
+                rest = [r for r in current if D.dock_key(r) not in stale]
+                rows = ours + rest if own_app else rest + ours
             rows = [{k: r.get(k) for k in ("link_type", "link_to", "url", "icon", "title", "hidden")} for r in rows]
             D._save_layer(app, rows, user=user, require_visible=False)
             layer = D.get_dock(app, user=user)
             if not layer:
                 self.warn(f"The Dock layer for {user or 'the site'} could not be saved.")
                 continue
+            created = not existing or layer.name in previous_created
             if not existing:
                 self.snapshots.append({"doctype": "Dock", "name": layer.name, "before": None})
             self.record("Dock", layer.name, "updated" if existing else "created",
-                        layer=f"{app} / {user or 'site'}", keys=sorted(keys))
+                        layer=f"{app} / {user or 'site'}", keys=sorted(keys), created=1 if created else 0)
+
+    def ensure_app_desktop_icon(self):
+        """Desktop icon (v16 Desktop Icon grid) for the Workspaces app. The Apps screen tile comes
+        from the app hook and needs nothing stored."""
+        if not frappe.db.exists("DocType", "Desktop Icon"):
+            return
+        name = frappe.db.get_value("Desktop Icon", {"icon_type": "App", "app": STUDIO_APP}, "name")
+        if name:
+            if cint(frappe.db.get_value("Desktop Icon", name, "hidden")):
+                self.snapshot("Desktop Icon", name)
+                frappe.db.set_value("Desktop Icon", name, "hidden", 0)
+                self.record("Desktop Icon", name, "shown")
+            return
+        label = STUDIO_APP_TITLE if not frappe.db.exists("Desktop Icon", STUDIO_APP_TITLE) else f"thinkNXG {STUDIO_APP_TITLE}"
+        icon = frappe.new_doc("Desktop Icon")
+        icon.update(self.filter_values("Desktop Icon", {
+            "label": label, "icon_type": "App", "app": STUDIO_APP, "link_type": "External",
+            "link": "/desk/workspace-studio", "logo_url": "/assets/thinknxg_workspace_studio/images/logo.svg",
+            "hidden": 0, "standard": 0,
+        }, "Desktop Icon"))
+        icon.insert(ignore_permissions=True)
+        self.snapshots.append({"doctype": "Desktop Icon", "name": icon.name, "before": None})
+        self.record("Desktop Icon", icon.name, "created")
+
+    def remove_dock_layer(self, entry):
+        """Undo this studio's Dock layer for a user who left the audience."""
+        name = entry.get("name")
+        if not frappe.db.exists("Dock", name):
+            return
+        if entry.get("created"):
+            self.snapshot("Dock", name)
+            frappe.delete_doc("Dock", name, ignore_permissions=True, force=True)
+            self.record("Dock", name, "removed")
+        else:
+            self.strip_dock_keys(name, entry.get("keys") or [])
 
     def strip_dock_keys(self, name, keys):
         """Remove only this studio's entries from a Dock layer someone else also uses."""
@@ -674,9 +768,13 @@ class Publisher:
             if cint(self.doc.publish_sidebar):
                 self.publish_native_sidebar(layer_homes)
             if cint(self.doc.enable_dock):
-                self.publish_native_dock(layer_homes)
+                shared = next((w for u, w in layer_homes if u is None), None)
+                self.publish_native_dock(self.dock_layers(shared, default_map))
             if cint(self.doc.create_desktop_icon):
-                self.warn("v16 lists the studio's module on the Dock and desktop itself, so no separate Desktop Icon was created.")
+                if self.dock_app() == STUDIO_APP:
+                    self.ensure_app_desktop_icon()
+                else:
+                    self.warn(f"Desktop icons are added for the Workspaces app only; '{self.dock_app()}' already has its own.")
         else:
             sidebar_ok = False
             if cint(self.doc.publish_sidebar):
@@ -697,8 +795,8 @@ class Publisher:
             doctype, name = entry.get("doctype"), entry.get("name")
             if (doctype, name) in current:
                 continue
-            if doctype == "Dock" and entry.get("keys"):
-                self.strip_dock_keys(name, entry["keys"])
+            if doctype == "Dock":
+                self.remove_dock_layer(entry)
             elif doctype in MANAGED_DOCTYPES and frappe.db.exists(doctype, name):
                 self.snapshot(doctype, name)
                 frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
@@ -722,6 +820,8 @@ class Publisher:
             entry = {"doctype": d["doctype"], "name": d["name"]}
             if d.get("keys"):
                 entry["keys"] = d["keys"]
+            if d.get("created"):
+                entry["created"] = 1
             out.append(entry)
         return out
 
@@ -820,6 +920,11 @@ def unpublish(name):
     def run():
         for entry in index:
             doctype, docname = entry.get("doctype"), entry.get("name")
+            if doctype == "Dock" and entry.get("created") and frappe.db.exists("Dock", docname):
+                snapshots.append({"doctype": "Dock", "name": docname, "before": _jsonable(frappe.get_doc("Dock", docname))})
+                frappe.delete_doc("Dock", docname, ignore_permissions=True, force=True)
+                documents.append({"doctype": "Dock", "name": docname, "action": "removed"})
+                continue
             if doctype == "Dock" and entry.get("keys") and frappe.db.exists("Dock", docname):
                 from frappe.desk.doctype.dock import dock as D
 

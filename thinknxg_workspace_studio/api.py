@@ -34,7 +34,20 @@ def _check():
 
 
 def has_app_permission():
-    return bool(set(MANAGER_ROLES) & set(frappe.get_roles()))
+    """Who may open the Workspaces app (its tile, desktop icon and Dock rail).
+
+    Managers always, for the designer. Everyone else when a studio published to this app's rail
+    for them: their own Dock layer, or a site-wide layer. In v16 an app whose permission check
+    fails gets an empty rail, so this must admit every audience user.
+    """
+    if frappe.session.user == "Administrator" or set(MANAGER_ROLES) & set(frappe.get_roles()):
+        return True
+    if not frappe.db.exists("DocType", "Dock"):
+        return False
+    layers = frappe.get_all(
+        "Dock", filters={"app": "thinknxg_workspace_studio", "standard": 0}, pluck="user"
+    )
+    return any(not u or u == frappe.session.user for u in layers)
 
 
 def _parse(value, default):

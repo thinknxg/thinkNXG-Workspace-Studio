@@ -130,8 +130,24 @@ def check_user(studio_name, user):
                 return False, "The pin is on the rail but hidden"
             return True, f"On the '{app}' rail ({len(rail)} entries)"
 
-        if expected_ws and frappe.db.exists("DocType", "Dock"):
+        explicit = {t.user for t in studio.targets if t.target_type == "User"}
+        manager = user == "Administrator" or "System Manager" in roles
+        excluded = (
+            studio.targets
+            and manager
+            and user not in explicit
+            and cint(frappe.db.get_single_value("Workspace Studio Settings", "exclude_managers_from_dock") or 0)
+        )
+        if excluded:
+            rep.add("Dock pin resolves for the user", True, "Not applied: Administrator / System Managers keep their native Dock (Workspace Studio Settings). Add the user individually to include them.")
+        elif expected_ws and frappe.db.exists("DocType", "Dock"):
             rep.run("Dock pin resolves for the user", dock)
+
+        def home_button():
+            show = frappe.db.get_single_value("Workspace Studio Settings", "show_home_on_dock")
+            return (show is None or cint(show) == 1, "Home button is on" if show is None or cint(show) else "Home button is turned off in Workspace Studio Settings")
+
+        rep.run("Home button on the Dock", home_button)
 
         def apps():
             from frappe.boot import get_app_data

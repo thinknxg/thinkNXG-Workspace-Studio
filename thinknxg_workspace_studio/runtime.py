@@ -175,3 +175,80 @@ def resolve_action(item, user, user_roles):
 
 def _slug(text):
     return (text or "").strip().lower().replace(" ", "-")
+
+
+# --------------------------------------------------------------------------- v16 Dock: Home
+def boot_session(bootinfo):
+    """Home button on the v16 Dock (read by public/js/studio_runtime.js)."""
+    try:
+        settings = frappe.get_cached_doc("Workspace Studio Settings")
+        show = settings.get("show_home_on_dock")
+        bootinfo.wss = {
+            "home_on_dock": 1 if show is None else cint(show),
+            "home_label": settings.get("home_label") or "Home",
+        }
+    except Exception:
+        bootinfo.wss = {"home_on_dock": 1, "home_label": "Home"}
+
+
+# --------------------------------------------------------------------------- role changes
+AUTOMATIC_AUDIENCE_ROLES = ("Desk User", "All")
+
+
+def on_user_update(doc, method=None):
+    """Republish studios whose role audience this user just joined or left.
+
+    v16 has no role-level Dock or sidebar layer, so a role audience is materialised as one layer
+    per user. Without this, a user given the role later would get nothing until someone
+    republished by hand.
+    """
+    if any(frappe.flags.get(f) for f in ("in_install", "in_migrate", "in_import", "in_patch", "in_test")):
+        return
+    try:
+        enabled = frappe.db.get_single_value("Workspace Studio Settings", "auto_republish_on_role_change")
+    except Exception:
+        enabled = 1
+    if enabled is not None and not cint(enabled):
+        return
+
+    before = doc.get_doc_before_save()
+    old = {r.role for r in (before.roles if before else [])}
+    new = {r.role for r in doc.roles}
+    changed = old ^ new
+    status_changed = before is None or before.enabled != doc.enabled or before.user_type != doc.user_type
+    if status_changed:
+        changed |= old | new | set(AUTOMATIC_AUDIENCE_ROLES)
+    if not changed:
+        return
+
+    studios = set(
+        frappe.get_all(
+            "Studio Target",
+            filters={"parenttype": "Studio Workspace", "target_type": "Role", "role": ["in", list(changed)]},
+            pluck="parent",
+        )
+    )
+    if status_changed:
+        studios |= set(
+            frappe.get_all(
+                "Studio Target",
+                filters={"parenttype": "Studio Workspace", "target_type": "User", "user": doc.name},
+                pluck="parent",
+            )
+        )
+    if not studios:
+        return
+    # Only studios whose published state matches the designer: republishing a 'Modified' studio
+    # would publish someone's unfinished draft.
+    published = frappe.get_all(
+        "Studio Workspace", filters={"name": ["in", list(studios)], "status": "Published"}, pluck="name"
+    )
+    for name in published:
+        frappe.enqueue(
+            "thinknxg_workspace_studio.publisher.publish",
+            name=name,
+            queue="short",
+            job_id=f"wss-republish::{name}",
+            deduplicate=True,
+            enqueue_after_commit=True,
+        )

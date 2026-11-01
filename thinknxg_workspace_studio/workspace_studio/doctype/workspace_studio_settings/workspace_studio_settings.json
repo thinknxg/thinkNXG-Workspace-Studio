@@ -4,6 +4,13 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "home_section",
+  "show_home_on_dock",
+  "home_label",
+  "column_break_home",
+  "exclude_managers_from_dock",
+  "auto_republish_on_role_change",
+  "quick_launch_section",
   "enable_dock",
   "hide_dock_on_mobile",
   "column_break_1",
@@ -12,17 +19,59 @@
  ],
  "fields": [
   {
+   "fieldname": "home_section",
+   "fieldtype": "Section Break",
+   "label": "v16 Dock"
+  },
+  {
    "default": "1",
-   "description": "Master switch for the Dock on every desk page.",
+   "description": "A Home button at the top of the Dock on every app's rail. It opens the user's default workspace (or their home module).",
+   "fieldname": "show_home_on_dock",
+   "fieldtype": "Check",
+   "label": "Show Home on the Dock"
+  },
+  {
+   "default": "Home",
+   "depends_on": "show_home_on_dock",
+   "fieldname": "home_label",
+   "fieldtype": "Data",
+   "label": "Home Label"
+  },
+  {
+   "fieldname": "column_break_home",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Administrator and System Managers who are in an audience only through a role keep their native Dock. Add them as individual users to include them.",
+   "fieldname": "exclude_managers_from_dock",
+   "fieldtype": "Check",
+   "label": "Never change the Dock of Administrator / System Managers"
+  },
+  {
+   "default": "1",
+   "description": "When a user's roles change, republish the studios whose audience roles are affected, so their workspace, sidebar and Dock follow.",
+   "fieldname": "auto_republish_on_role_change",
+   "fieldtype": "Check",
+   "label": "Republish on Role Change"
+  },
+  {
+   "fieldname": "quick_launch_section",
+   "fieldtype": "Section Break",
+   "label": "Studio Quick Launch bar"
+  },
+  {
+   "default": "1",
+   "description": "Master switch for the Studio Quick Launch bar (items the native Dock cannot hold).",
    "fieldname": "enable_dock",
    "fieldtype": "Check",
-   "label": "Enable Dock Globally"
+   "label": "Enable Quick Launch bar"
   },
   {
    "default": "0",
    "fieldname": "hide_dock_on_mobile",
    "fieldtype": "Check",
-   "label": "Hide Dock on Small Screens"
+   "label": "Hide Quick Launch bar on Small Screens"
   },
   {
    "fieldname": "column_break_1",
@@ -33,7 +82,7 @@
    "description": "Distance of the Dock from the screen edge, in pixels.",
    "fieldname": "dock_offset",
    "fieldtype": "Int",
-   "label": "Dock Offset (px)"
+   "label": "Quick Launch Offset (px)"
   },
   {
    "default": "10",
@@ -43,7 +92,7 @@
   }
  ],
  "issingle": 1,
- "modified": "2026-10-31 09:00:00.000000",
+ "modified": "2026-11-01 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "Workspace Studio",
  "name": "Workspace Studio Settings",

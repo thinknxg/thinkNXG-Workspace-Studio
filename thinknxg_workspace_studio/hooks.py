@@ -9,16 +9,22 @@ app_color = "#4f46e5"
 
 required_apps = ["frappe"]
 
-# Shown on the v16 apps screen / desktop
+# Workspace Studio is also a v16 Dock app ("Workspaces"): studios can publish to its rail instead
+# of ERPNext's. Managers see the Studio designer on it; audience users see their workspaces. The
+# tile, rail and desktop icon open the first entry of the user's rail.
 add_to_apps_screen = [
     {
         "name": "thinknxg_workspace_studio",
         "logo": "/assets/thinknxg_workspace_studio/images/logo.svg",
-        "title": "Workspace Studio",
-        "route": "/app/workspace-studio",
+        "title": "Workspaces",
+        "route": "/desk/workspace-studio",
         "has_permission": "thinknxg_workspace_studio.api.has_app_permission",
+        "sequence_id": 5,
     }
 ]
+
+# Adds the Home button settings to the boot, read by the Dock runtime.
+boot_session = "thinknxg_workspace_studio.runtime.boot_session"
 
 # Dock runtime is loaded on every desk page
 app_include_js = ["/assets/thinknxg_workspace_studio/js/studio_runtime.js"]
@@ -31,5 +37,9 @@ after_migrate = "thinknxg_workspace_studio.install.after_migrate"
 doc_events = {
     "Workspace Studio Settings": {
         "on_update": "thinknxg_workspace_studio.runtime.clear_runtime_cache",
+    },
+    # role audiences are materialised per user, so a role change republishes affected studios
+    "User": {
+        "on_update": "thinknxg_workspace_studio.runtime.on_user_update",
     },
 }

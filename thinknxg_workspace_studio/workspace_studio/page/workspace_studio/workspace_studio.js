@@ -1904,8 +1904,9 @@ frappe.provide("wss");
 					<div class="wss-dock-help">${ico("info", 13)} ${
 						this.hints.native_navigation !== false
 							? ((this.props.publish_mode || "").startsWith("Personal")
-									? __("Personal mode: every user in the audience gets their own Dock, starting with a pin to their personal copy of this workspace.")
-									: __("Shared mode: one site-wide Dock entry pins the shared workspace; v16 shows it only to users who can open it (the audience roles). Users added individually get their own Dock pointing at their personal copy.")) +
+									? __("Personal mode: every user in the audience gets their own Dock layer with a pin to their personal copy of this workspace.")
+									: __("Shared mode: with no audience, one site-wide entry pins the shared workspace. With an audience, each audience user gets their own Dock layer pinned to it, so nobody else's Dock changes. Administrator and System Managers keep their native Dock unless added as individual users.")) +
+								" " + __("A Home button on every rail opens the user's default workspace.") +
 								" " + __("Module, Workspace and URL entries go to the native v16 Dock; entries with a dashed ring (lists, new documents, reports, pages, dashboards) appear in the Studio Quick Launch bar.")
 							: __("Drag to reorder. Items the user has no permission for are hidden automatically.")
 					}</div>
@@ -2011,12 +2012,21 @@ frappe.provide("wss");
 				const opt = (arr) => arr.map(([v, l]) => ({ value: v, label: l }));
 				if (this.hints.native_navigation !== false) {
 					$i.find(".wss-ins-form").before(`<div class="wss-ins-section"><div class="wss-ins-label">${__("v16 Dock")}</div><div data-form="native"></div></div>`);
-					const apps = (this.hints.installed_apps || []).map((a) => ({ value: a, label: a }));
+					const apps = (this.hints.installed_apps || []).map((a) => ({
+						value: a,
+						label: a === "thinknxg_workspace_studio" ? __("Workspaces (custom Dock app)") : a,
+					}));
 					make_form(
 						$i.find("[data-form=native]"),
 						[
 							{ fieldtype: "Check", fieldname: "enable_dock", label: __("Publish to the Dock") },
-							{ fieldtype: "Select", fieldname: "dock_app", label: __("App rail"), options: [{ value: "", label: __("Default (ERPNext, else Frappe)") }].concat(apps) },
+							{
+								fieldtype: "Select",
+								fieldname: "dock_app",
+								label: __("App rail"),
+								options: [{ value: "", label: __("Default (ERPNext, else Frappe)") }].concat(apps),
+								description: __("Pick 'Workspaces' to give studios their own app, tile and rail instead of sharing ERPNext's."),
+							},
 							{
 								fieldtype: "Select",
 								fieldname: "dock_mode",
@@ -2025,6 +2035,13 @@ frappe.provide("wss");
 									{ value: "Add to the app's Dock", label: __("Add to the existing rail") },
 									{ value: "Replace the app's Dock", label: __("Replace the rail with these entries") },
 								],
+								description: __("Add keeps every native entry (studio entries go after ERPNext's, so the ERPNext tile still opens ERPNext). Replace applies to audience users only; everyone else keeps the native rail."),
+							},
+							{
+								fieldtype: "Check",
+								fieldname: "create_desktop_icon",
+								label: __("Add a desktop icon for the Workspaces app"),
+								depends_on: "eval:doc.dock_app=='thinknxg_workspace_studio'",
 							},
 						],
 						this.props,
@@ -2188,7 +2205,7 @@ frappe.provide("wss");
 					{ fieldtype: "Check", fieldname: "set_as_default", label: __("Set as the audience's default workspace") },
 					{ fieldtype: "Column Break" },
 					{ fieldtype: "Check", fieldname: "publish_sidebar", label: __("Publish left sidebar menu") },
-					{ fieldtype: "Check", fieldname: "create_desktop_icon", label: __("Create desktop icon") },
+					{ fieldtype: "Check", fieldname: "create_desktop_icon", label: __("Add desktop icon for the Workspaces app") },
 					{ fieldtype: "Check", fieldname: "enable_dock", label: __("Provide the Dock for this audience") },
 					{ fieldtype: "Check", fieldname: "take_over_existing", label: __("Allow replacing an existing workspace with the same label") },
 				],

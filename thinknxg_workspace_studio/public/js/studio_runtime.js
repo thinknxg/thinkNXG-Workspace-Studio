@@ -138,6 +138,72 @@
 		});
 	}
 
+	// ------------------------------------------------------------------ v16 Dock: Home
+	// A Home button in the Dock's utilities (beside Search and Notifications), so it is on every
+	// app's rail without writing Dock layers. It opens the user's default workspace, or the home
+	// shell the desk computed when they have none.
+	function go_home(sidebar) {
+		const dw = frappe.boot.user && frappe.boot.user.default_workspace;
+		const pages = (frappe.boot.workspaces && frappe.boot.workspaces.pages) || [];
+		if (dw && dw.name && sidebar && sidebar.open_dock_entry) {
+			const page = pages.find((p) => p.name === dw.name);
+			if (page) {
+				const module = (sidebar.module_for_workspace && sidebar.module_for_workspace(dw.name)) || page.module;
+				return sidebar.open_dock_entry({ link_type: "Workspace", link_to: dw.name, url: null, module, page });
+			}
+		}
+		if (sidebar && sidebar.default_shell && sidebar.module_landing_route) {
+			const shell = sidebar.default_shell();
+			const route = shell && sidebar.module_landing_route(shell);
+			if (route) {
+				sidebar.select_shell && sidebar.select_shell(shell);
+				return frappe.set_route(route);
+			}
+		}
+		window.location.href = "/desk";
+	}
+
+	function add_home(dock) {
+		const cfg = frappe.boot.wss || {};
+		if (!cfg.home_on_dock || frappe.session.user === "Guest" || !dock || !dock.$dock) return;
+		const $utilities = dock.$dock.find(".dock-utilities");
+		if (!$utilities.length || $utilities.find(".wss-dock-home").length) return;
+		const label = __(cfg.home_label || "Home");
+		const $home = dock.make_utility
+			? dock.make_utility({ label, icon: "home", css_class: "wss-dock-home" })
+			: $(`<button class="dock-item wss-dock-home" aria-label="${esc(label)}"><span class="dock-item-icon">${frappe.utils.icon("home", "sm")}</span></button>`);
+		$home.on("click", (e) => {
+			e.preventDefault();
+			go_home(dock.sidebar);
+		});
+		$utilities.prepend($home);
+	}
+
+	function patch_native_dock() {
+		const Dock = frappe.ui && frappe.ui.Dock;
+		if (!Dock || Dock.prototype.__wss_home) return !!Dock;
+		const render_utilities = Dock.prototype.render_utilities;
+		Dock.prototype.render_utilities = function () {
+			const out = render_utilities ? render_utilities.apply(this, arguments) : undefined;
+			try {
+				add_home(this);
+			} catch (e) {
+				console.warn("Workspace Studio: could not add Home to the Dock", e);
+			}
+			return out;
+		};
+		Dock.prototype.__wss_home = true;
+		// a Dock built before this script ran
+		const existing = frappe.app && frappe.app.sidebar && frappe.app.sidebar.dock;
+		if (existing) add_home(existing);
+		return true;
+	}
+
+	wss.dock.patch_native_dock = patch_native_dock;
+	if (!patch_native_dock()) {
+		$(document).on("app_ready", patch_native_dock);
+	}
+
 	$(document).on("app_ready", start);
 	$(() => setTimeout(start, 1500));
 })();

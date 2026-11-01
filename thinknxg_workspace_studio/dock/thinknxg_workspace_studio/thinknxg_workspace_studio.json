@@ -1,0 +1,23 @@
+{
+ "app": "thinknxg_workspace_studio",
+ "creation": "2026-11-01 13:00:00",
+ "docstatus": 0,
+ "doctype": "Dock",
+ "idx": 0,
+ "items": [
+  {
+   "added": 0,
+   "hidden": 0,
+   "icon": "data-table-soft",
+   "link_to": "Workspace Studio",
+   "link_type": "Sidebar",
+   "title": "Workspace Studio"
+  }
+ ],
+ "modified": "2026-11-01 13:00:00.000000",
+ "modified_by": "Administrator",
+ "name": "thinknxg_workspace_studio",
+ "owner": "Administrator",
+ "standard": 1,
+ "user": ""
+}
