@@ -97,6 +97,16 @@ thinknxg_workspace_studio/
 
 Run the pure tests: `python -m unittest thinknxg_workspace_studio.tests.test_schema`
 
+End-to-end on a real v16 bench (thinkNXG + thinkNXG ERP version-16). It creates `E2E` users and
+studios, publishes them to the thinkNXG ERP rail and the Workspaces app, and prints what each user's
+desk boot receives (workspaces, module sidebars, Dock rails, default workspace) plus *Check a user*:
+
+```bash
+bench --site yoursite execute thinknxg_workspace_studio.tests.e2e_v16.run
+```
+
+Run it on a test site: it creates and republishes its own records.
+
 ## Notes for v16
 
 * **Module**: v16 requires one on every Workspace. If the studio leaves it empty, shared workspaces go to

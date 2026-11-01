@@ -74,3 +74,6 @@ class StudioWorkspace(Document):
             frappe.throw(
                 _("Unpublish this studio before deleting it, so the workspaces it created are removed cleanly.")
             )
+        # The publish logs belong to the studio; they would otherwise block the delete (LinkExistsError).
+        for log in frappe.get_all("Studio Publish Log", filters={"studio": self.name}, pluck="name"):
+            frappe.delete_doc("Studio Publish Log", log, ignore_permissions=True, force=True)

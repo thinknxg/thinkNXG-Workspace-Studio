@@ -35,6 +35,18 @@ INDEXED_DOCTYPES = MANAGED_DOCTYPES + ("Module Def", "Dock")
 PRIVATE_MODULE = "Private"
 CUSTOM_MODULE = "Custom Workspaces"
 DEFAULT_DOCK_ICON = "data-table-soft"
+# v16 module icons that ship in the desk sprite. A studio with no icon gets one of these, picked
+# from its name, so several studios on one rail are told apart at a glance.
+FRAPPE_DOCK_ICONS = (
+    "automation-cycle-soft", "code-app-soft", "contacts-cards-soft", "email-envelope-soft",
+    "geo-pin-soft", "integrations-cable-soft", "printing-printer-soft", "system-monitor-soft",
+    "users-soft", "website-browser-soft", "workflow-builder-soft",
+)
+ERPNEXT_DOCK_ICONS = (
+    "asset-hand-soft", "calculator-soft", "factory-soft", "gantt-chart-soft", "handshake-soft",
+    "headset-soft", "portal-user-soft", "quality-seal-soft", "shelf-rack-soft",
+    "shopping-cart-soft", "sliders-soft", "storefront-soft",
+)
 # Workspace Studio is itself a v16 Dock app ("Workspaces"), usable instead of thinkNXG ERP's rail.
 STUDIO_APP = "thinknxg_workspace_studio"
 STUDIO_APP_TITLE = "Workspaces"
@@ -48,6 +60,53 @@ def studio_setting(field, default):
         return default
     return default if value is None else value
 MAX_LAYER_USERS = 500
+
+
+def is_shared_app_icon(doctype, name):
+    """The Workspaces app's desktop icon is shared by every studio; no studio may delete it."""
+    return doctype == "Desktop Icon" and frappe.db.get_value(
+        "Desktop Icon", name, ["icon_type", "app"], as_dict=True
+    ) == {"icon_type": "App", "app": STUDIO_APP}
+
+
+def keys_claimed_by_others(studio, dock_name):
+    """Dock keys other studios still have on the same layer (e.g. a shared URL)."""
+    out = set()
+    for other in frappe.get_all(
+        "Studio Workspace",
+        filters={"name": ["!=", studio], "status": ["in", ["Published", "Modified"]]},
+        fields=["published_index"],
+    ):
+        for e in schema.loads(other.published_index, []):
+            if e.get("doctype") == "Dock" and e.get("name") == dock_name:
+                out.update(e.get("keys") or [])
+    return out
+
+
+def retire_dock_layer(name, keys, created):
+    """Take one studio's entries out of a Dock layer.
+
+    Other studios may share the layer, so only this studio's entries are removed. A layer the
+    studio created is deleted outright when what is left is just the native rail it was seeded
+    from, which gives the user the live native Dock back instead of a frozen copy.
+    Returns ('removed' | 'entries removed' | None, snapshot-before).
+    """
+    from frappe.desk.doctype.dock import dock as D
+
+    if not frappe.db.exists("Dock", name):
+        return None, None
+    doc = frappe.get_doc("Dock", name)
+    before = _jsonable(doc)
+    keys = set(keys or [])
+    remaining = [r for r in (doc.get("items") or []) if D.dock_key(r) not in keys]
+    if created:
+        native = {D.dock_key(e) for e in D.resolve_app_dock(doc.app, upto="site" if doc.user else "app", gated=False)}
+        if all(D.dock_key(r) in native for r in remaining):
+            frappe.delete_doc("Dock", name, ignore_permissions=True, force=True)
+            return "removed", before
+    doc.set("items", remaining)
+    doc.save(ignore_permissions=True)
+    return "entries removed", before
 
 
 def native_navigation():
@@ -178,7 +237,7 @@ class Publisher:
         for candidate in (self.title, f"{self.title} Workspace", f"{self.title} Studio"):
             existing = frappe.db.get_value("Module Def", candidate, "name")
             if existing:
-                if ("Module Def", existing) in self.owned:
+                if ("Module Def", existing) in self.owned or self.can_adopt_module(existing):
                     self._module = existing
                     self.place_module(existing)
                     self.record("Module Def", existing, "kept")
@@ -210,6 +269,19 @@ class Publisher:
                 f"so this studio uses its own module '{self._module}'."
             )
         return self._module
+
+    def can_adopt_module(self, module):
+        """A custom module left behind by this studio (e.g. after delete/recreate or unpublish):
+        exact name, custom, not claimed by another studio, and holding nothing but workspaces."""
+        info = frappe.db.get_value("Module Def", module, ["name", "custom"], as_dict=True)
+        if not info or info.name != module or not cint(info.custom):
+            return False
+        for other in frappe.get_all("Studio Workspace", filters={"name": ["!=", self.doc.name]}, fields=["published_index"]):
+            if any(e.get("doctype") == "Module Def" and e.get("name") == module for e in schema.loads(other.published_index, [])):
+                return False
+        if frappe.db.exists("DocType", {"module": module}) or frappe.db.exists("Report", {"module": module}):
+            return False
+        return True
 
     def place_module(self, module):
         """Keep the studio's own module placed in the current Dock app."""
@@ -477,6 +549,7 @@ class Publisher:
         if not frappe.get_meta("User").has_field("default_workspace"):
             self.warn("User has no 'default_workspace' field on this version; default not set.")
             return
+        mapping = self.default_owner_filter(mapping)
         for user, ws_name in mapping.items():
             old = frappe.db.get_value("User", user, "default_workspace")
             if old == ws_name:
@@ -488,6 +561,47 @@ class Publisher:
             frappe.clear_cache(user=user)
         if mapping:
             self.record("User", f"{len(mapping)} user(s)", "default workspace set")
+
+    def default_owner_filter(self, mapping):
+        """Keep only users for whom this studio should own the default workspace: this studio is
+        their highest-priority published studio with 'Set as default' on, and they are not an
+        Administrator/System Manager reached through a role (setting)."""
+        explicit = set(self.target_users())
+        exclude = cint(studio_setting("exclude_managers_from_dock", 1))
+        mine = cint(self.doc.get("priority"))
+        rivals = [
+            s for s in frappe.get_all(
+                "Studio Workspace",
+                filters={"name": ["!=", self.doc.name], "status": ["in", ["Published", "Modified"]], "set_as_default": 1},
+                fields=["name", "priority", "published_index"],
+            )
+        ]
+        kept, managers, lost = {}, 0, {}
+        for user, ws in mapping.items():
+            if exclude and user not in explicit and (user == "Administrator" or "System Manager" in frappe.get_roles(user)):
+                managers += 1
+                continue
+            winner = None
+            for r in rivals:
+                rank = (cint(r.priority), r.name < self.doc.name)
+                if rank <= (mine, False):
+                    continue
+                ws_names = {e.get("name") for e in schema.loads(r.published_index, []) if e.get("doctype") == "Workspace"}
+                if frappe.db.get_value("User", user, "default_workspace") in ws_names:
+                    winner = r.name
+                    break
+            if winner:
+                lost[user] = winner
+                continue
+            kept[user] = ws
+        if managers:
+            self.warn(f"The default workspace of {managers} Administrator/System Manager account(s) was left unchanged.")
+        if lost:
+            self.warn(
+                f"{len(lost)} user(s) keep the default workspace of a higher-priority studio ("
+                + ", ".join(sorted(set(lost.values()))) + "). Raise this studio's Priority to take over."
+            )
+        return kept
 
     # ------------------------------------------------------------------ native sidebar (v16)
     def sidebar_rows(self, user_roles, home):
@@ -557,12 +671,33 @@ class Publisher:
             self.warn(f"Dock app '{app}' is not installed; using the default rail ({schema.app_label('erpnext') if 'erpnext' in installed else schema.app_label('frappe')}) instead.")
         return "erpnext" if "erpnext" in installed else "frappe"
 
+    def ensure_studio_icon(self):
+        """Give a studio without an icon a distinct v16 module icon, stored on the studio so it
+        never changes and is visible (and editable) in the designer. Icons other studios hold
+        are skipped, so several studios on one rail look different."""
+        if self.doc.icon:
+            return self.doc.icon
+        import hashlib
+
+        palette = FRAPPE_DOCK_ICONS + (ERPNEXT_DOCK_ICONS if "erpnext" in frappe.get_installed_apps() else ())
+        used = set(
+            frappe.get_all("Studio Workspace", filters={"name": ["!=", self.doc.name], "icon": ["is", "set"]}, pluck="icon")
+        )
+        start = int(hashlib.md5(self.doc.name.encode()).hexdigest(), 16) % len(palette)
+        pick = next((palette[(start + i) % len(palette)] for i in range(len(palette)) if palette[(start + i) % len(palette)] not in used), palette[start])
+        self.doc.db_set("icon", pick, update_modified=False)
+        self.doc.icon = pick
+        return pick
+
+    def studio_dock_icon(self):
+        return self.doc.icon or self.ensure_studio_icon()
+
     def native_dock_entries(self, user_roles, home):
         """Dock entries for one layer. The first pins the layer's own workspace: the shared one
         on the site layer, the user's personal copy on a user layer. v16 derives the sidebar
         from the workspace's module, so it opens with the studio's menu beside it."""
         entries = [{"link_type": "Workspace", "link_to": home, "title": self.title,
-                    "icon": self.doc.icon or DEFAULT_DOCK_ICON, "hidden": 0}]
+                    "icon": self.studio_dock_icon(), "hidden": 0}]
         for it in self.dock["items"]:
             if not schema.is_native_dock_item(it) or not schema.visible_for(it["roles"], user_roles):
                 continue
@@ -664,6 +799,7 @@ class Publisher:
                 stale = keys | previous_keys
                 rest = [r for r in current if D.dock_key(r) not in stale]
                 rows = ours + rest if own_app else rest + ours
+            rows = self.order_studio_pins(rows, keys, D)
             rows = [{k: r.get(k) for k in ("link_type", "link_to", "url", "icon", "title", "hidden")} for r in rows]
             D._save_layer(app, rows, user=user, require_visible=False)
             layer = D.get_dock(app, user=user)
@@ -676,6 +812,39 @@ class Publisher:
             self.record("Dock", layer.name, "updated" if existing else "created",
                         layer=f"{schema.app_label(app)} / {user or 'site'}", keys=sorted(keys), created=1 if created else 0)
 
+    def studio_pin_priorities(self, D):
+        """dock_key -> (priority, studio) for every studio's workspace pin, this one included."""
+        if getattr(self, "_pin_priorities", None) is not None:
+            return self._pin_priorities
+        out = {}
+        for s in frappe.get_all(
+            "Studio Workspace", filters={"status": ["in", ["Published", "Modified"]]},
+            fields=["name", "priority", "published_index"],
+        ):
+            if s.name == self.doc.name:
+                continue
+            for e in schema.loads(s.published_index, []):
+                if e.get("doctype") == "Workspace":
+                    out[D.dock_key({"link_type": "Workspace", "link_to": e.get("name")})] = (cint(s.priority), s.name)
+        self._pin_priorities = out
+        return out
+
+    def order_studio_pins(self, rows, my_keys, D):
+        """Studio workspace pins sit together, highest priority first (ties by name), wherever
+        the studio block is on the rail. Other entries keep their order. The app tile opens the
+        first entry, so on the Workspaces app that is the user's highest-priority studio."""
+        prio = dict(self.studio_pin_priorities(D))
+        mine = (cint(self.doc.get("priority")), self.doc.name)
+        for r in rows:
+            k = D.dock_key(r)
+            if k in my_keys and r.get("link_type") == "Workspace":
+                prio[k] = mine
+        pins = [r for r in rows if D.dock_key(r) in prio]
+        if len(pins) < 2:
+            return rows
+        ordered = iter(sorted(pins, key=lambda r: (-prio[D.dock_key(r)][0], prio[D.dock_key(r)][1])))
+        return [next(ordered) if D.dock_key(r) in prio else r for r in rows]
+
     def ensure_app_desktop_icon(self):
         """Desktop icon (v16 Desktop Icon grid) for the Workspaces app. The Apps screen tile comes
         from the app hook and needs nothing stored."""
@@ -687,6 +856,8 @@ class Publisher:
                 self.snapshot("Desktop Icon", name)
                 frappe.db.set_value("Desktop Icon", name, "hidden", 0)
                 self.record("Desktop Icon", name, "shown")
+            else:
+                self.record("Desktop Icon", name, "kept")
             return
         label = STUDIO_APP_TITLE if not frappe.db.exists("Desktop Icon", STUDIO_APP_TITLE) else f"thinkNXG {STUDIO_APP_TITLE}"
         icon = frappe.new_doc("Desktop Icon")
@@ -700,28 +871,12 @@ class Publisher:
         self.record("Desktop Icon", icon.name, "created")
 
     def remove_dock_layer(self, entry):
-        """Undo this studio's Dock layer for a user who left the audience."""
-        name = entry.get("name")
-        if not frappe.db.exists("Dock", name):
-            return
-        if entry.get("created"):
-            self.snapshot("Dock", name)
-            frappe.delete_doc("Dock", name, ignore_permissions=True, force=True)
-            self.record("Dock", name, "removed")
-        else:
-            self.strip_dock_keys(name, entry.get("keys") or [])
-
-    def strip_dock_keys(self, name, keys):
-        """Remove only this studio's entries from a Dock layer someone else also uses."""
-        from frappe.desk.doctype.dock import dock as D
-
-        if not frappe.db.exists("Dock", name):
-            return
-        doc = frappe.get_doc("Dock", name)
-        self.snapshot("Dock", name)
-        doc.set("items", [r for r in (doc.get("items") or []) if D.dock_key(r) not in set(keys)])
-        doc.save(ignore_permissions=True)
-        self.record("Dock", name, "entries removed")
+        """Undo this studio's Dock entries for a user who left the audience."""
+        keys = set(entry.get("keys") or []) - keys_claimed_by_others(self.doc.name, entry.get("name"))
+        action, before = retire_dock_layer(entry.get("name"), keys, entry.get("created"))
+        if action:
+            self.snapshots.append({"doctype": "Dock", "name": entry.get("name"), "before": before})
+            self.record("Dock", entry.get("name"), action)
 
     # ------------------------------------------------------------------ run
     def run(self):
@@ -733,6 +888,8 @@ class Publisher:
 
         if not self.layout["blocks"]:
             frappe.throw(_("The layout is empty. Add at least one block before publishing."))
+        if self.native:
+            self.ensure_studio_icon()
 
         if mode.startswith("Shared"):
             payload, warns = schema.build_workspace_payload(self.layout)
@@ -797,7 +954,7 @@ class Publisher:
                 continue
             if doctype == "Dock":
                 self.remove_dock_layer(entry)
-            elif doctype in MANAGED_DOCTYPES and frappe.db.exists(doctype, name):
+            elif doctype in MANAGED_DOCTYPES and frappe.db.exists(doctype, name) and not is_shared_app_icon(doctype, name):
                 self.snapshot(doctype, name)
                 frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
                 self.record(doctype, name, "removed")
@@ -874,11 +1031,18 @@ def publish(name):
     try:
         _as_admin(publisher.run)
     except Exception as e:
+        trace = frappe.get_traceback()
         frappe.db.rollback()
-        message = str(e) if isinstance(e, frappe.ValidationError) else _("Publishing failed: {0}").format(e)
-        if not isinstance(e, frappe.ValidationError):
-            frappe.log_error(title="Workspace Studio: publish failed")
-        _log(name, "Publish", "Failed", [], [message] + publisher.warnings, [], actor)
+        detail = str(e).strip() or _("no message")
+        if isinstance(e, frappe.ValidationError) and str(e).strip():
+            message = detail
+        else:
+            message = _("Publishing failed ({0}): {1}").format(type(e).__name__, detail)
+        err = frappe.log_error(title=f"Workspace Studio: publish failed ({name})", message=trace)
+        err_name = getattr(err, "name", None)
+        if err_name:
+            message += " " + _("Full traceback: Error Log {0}").format(err_name)
+        _log(name, "Publish", "Failed", [], [message, trace] + publisher.warnings, [], actor)
         frappe.db.commit()
         frappe.throw(message, title=_("Publish failed"))
 
@@ -920,22 +1084,14 @@ def unpublish(name):
     def run():
         for entry in index:
             doctype, docname = entry.get("doctype"), entry.get("name")
-            if doctype == "Dock" and entry.get("created") and frappe.db.exists("Dock", docname):
-                snapshots.append({"doctype": "Dock", "name": docname, "before": _jsonable(frappe.get_doc("Dock", docname))})
-                frappe.delete_doc("Dock", docname, ignore_permissions=True, force=True)
-                documents.append({"doctype": "Dock", "name": docname, "action": "removed"})
+            if doctype == "Dock":
+                keys = set(entry.get("keys") or []) - keys_claimed_by_others(name, docname)
+                action, before = retire_dock_layer(docname, keys, entry.get("created"))
+                if action:
+                    snapshots.append({"doctype": "Dock", "name": docname, "before": before})
+                    documents.append({"doctype": "Dock", "name": docname, "action": action})
                 continue
-            if doctype == "Dock" and entry.get("keys") and frappe.db.exists("Dock", docname):
-                from frappe.desk.doctype.dock import dock as D
-
-                dock = frappe.get_doc("Dock", docname)
-                snapshots.append({"doctype": "Dock", "name": docname, "before": _jsonable(dock)})
-                keys = set(entry["keys"])
-                dock.set("items", [r for r in (dock.get("items") or []) if D.dock_key(r) not in keys])
-                dock.save(ignore_permissions=True)
-                documents.append({"doctype": "Dock", "name": docname, "action": "entries removed"})
-                continue
-            if doctype not in MANAGED_DOCTYPES or not frappe.db.exists(doctype, docname):
+            if doctype not in MANAGED_DOCTYPES or not frappe.db.exists(doctype, docname) or is_shared_app_icon(doctype, docname):
                 continue
             snapshots.append({"doctype": doctype, "name": docname, "before": _jsonable(frappe.get_doc(doctype, docname))})
             frappe.delete_doc(doctype, docname, ignore_permissions=True, force=True)

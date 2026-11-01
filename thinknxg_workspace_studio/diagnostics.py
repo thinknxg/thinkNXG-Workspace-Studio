@@ -177,7 +177,7 @@ def check_user(studio_name, user):
 
             frappe.cache.hdel("home_page", user)
             hp = get_home_page()
-            return (not cint(studio.set_as_default) or (expected_ws and expected_ws.lower().replace(" ", "-") in hp.lower()) or "desk" in hp, f"Home page after login: /{hp}")
+            return (not cint(studio.set_as_default) or (expected_ws and expected_ws.lower().replace(" ", "-") in hp.lower()) or "desk" in hp, f"Home page after login: /{hp.lstrip('/')}")
 
         rep.run("Login home page", home)
     finally:
