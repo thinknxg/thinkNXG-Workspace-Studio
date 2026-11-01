@@ -292,6 +292,43 @@ class Publisher:
         frappe.db.set_value("Module Def", module, "app_name", app)
         frappe.clear_cache()
 
+    @property
+    def page_title(self):
+        """Title (and URL) of the published workspace pages.
+
+        v16 refuses a workspace whose title gives the same /desk URL as a DocType, Page or another
+        Workspace (`validate_route_conflict`, which raises a NameError with no message). A label
+        such as 'Estimation' clashes with an Estimation DocType, so the page gets the first free
+        title of '<Label>', '<Label> Workspace', '<Label> Desk', '<Label> Home'. The Dock entry
+        and sidebar header keep showing the label.
+        """
+        if getattr(self, "_page_title", None):
+            return self._page_title
+        from frappe.desk.utils import slug as route_slug
+
+        taken = {}
+        for dt in ("DocType", "Page"):
+            for n in frappe.get_all(dt, pluck="name"):
+                taken.setdefault(route_slug(n), f"{_(dt)} '{n}'")
+        for n in frappe.get_all("Workspace", pluck="name"):
+            if ("Workspace", n) in self.owned:
+                continue
+            taken.setdefault(route_slug(n), f"{_('Workspace')} '{n}'")
+        candidates = [self.title] + [f"{self.title} {s}" for s in ("Workspace", "Desk", "Home")]
+        candidates += [f"{self.title} {i}" for i in range(2, 50)]
+        pick = next((c for c in candidates if route_slug(c) not in taken), None)
+        if not pick:
+            frappe.throw(_("Could not find a free page title for {0}. Change the Workspace Label.").format(self.title))
+        if pick != self.title:
+            self.warn(
+                f"The label '{self.title}' would share the URL /desk/{route_slug(self.title)} with the "
+                f"{taken[route_slug(self.title)]}, which v16 does not allow, so the page is published as "
+                f"'{pick}' (/desk/{route_slug(pick)}). The Dock and sidebar still show '{self.title}'. "
+                "Change the Workspace Label to choose another name."
+            )
+        self._page_title = pick
+        return pick
+
     # ------------------------------------------------------------------ audience
     def target_roles(self):
         return [t.role for t in self.doc.targets if t.target_type == "Role" and t.role]
@@ -360,7 +397,7 @@ class Publisher:
         meta = frappe.get_meta("Workspace")
         values = {
             "label": label,
-            "title": self.title,
+            "title": self.page_title,
             "public": 1 if public else 0,
             "for_user": for_user or "",
             "icon": self.doc.icon or None,
@@ -398,7 +435,7 @@ class Publisher:
         else:
             ws.insert(ignore_permissions=True)
 
-        self.record("Workspace", ws.name, action, ("/desk/" + slug(self.title)) if public else None)
+        self.record("Workspace", ws.name, action, ("/desk/" + slug(self.page_title)) if public else None)
         return ws.name
 
     def enrich_report_links(self, ws):
@@ -902,7 +939,7 @@ class Publisher:
                 )
             if not roles and not users:
                 self.warn("No audience set: the shared workspace is visible to every desk user.")
-            shared_name = self.upsert_workspace(self.title, True, None, roles, payload)
+            shared_name = self.upsert_workspace(self.page_title, True, None, roles, payload)
             layer_homes.append((None, shared_name))
             for user in self.users_for_roles(roles):
                 default_map[user] = shared_name
@@ -964,7 +1001,7 @@ class Publisher:
         payload, warns = schema.build_workspace_payload(self.layout, user_roles=user_roles)
         for w in warns:
             self.warn(w)
-        return self.upsert_workspace(f"{self.title}-{user}", False, user, [], payload)
+        return self.upsert_workspace(f"{self.page_title}-{user}", False, user, [], payload)
 
     def index(self):
         out, seen = [], set()

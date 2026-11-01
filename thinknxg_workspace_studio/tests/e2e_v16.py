@@ -115,6 +115,12 @@ def run():
     _publish("E2E ESTIMATION")
     frappe.db.commit()
 
+    print("\n== 1b. Label that clashes with a DocType URL (Quotation -> /desk/quotation)")
+    _studio("Quotation")
+    _publish("Quotation")
+    frappe.db.commit()
+    print("  page title:", frappe.db.get_value("Workspace", {"name": ["like", "Quotation%"], "public": 1}, "title"))
+
     print("\n== 2. Three studios on the Workspaces app")
     frappe.db.set_value("User", "e2e.manager@example.com", "default_workspace", None)
     for t, prio in (("E2E Finance Desk", 10), ("E2E Sales Desk", 30), ("E2E Ops Desk", 20)):
