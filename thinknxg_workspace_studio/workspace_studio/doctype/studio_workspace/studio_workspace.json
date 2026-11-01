@@ -132,10 +132,10 @@
    "label": "Priority"
   },
   {
-   "default": "0",
+   "default": "1",
    "fieldname": "set_as_default",
    "fieldtype": "Check",
-   "label": "Set as Default Workspace for Audience"
+   "label": "Set as Default Workspace (users land on it after login)"
   },
   {
    "default": "0",

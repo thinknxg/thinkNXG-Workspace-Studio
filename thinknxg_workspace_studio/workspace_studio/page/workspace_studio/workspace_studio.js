@@ -2130,7 +2130,8 @@ frappe.provide("wss");
 					<section class="wss-panel"><div class="wss-panel-head">${ico("users", 16)} ${__("Audience")}</div>
 						<div class="wss-panel-body">
 							<div data-form="aud"></div>
-							<div class="wss-aud-preview"><button class="btn btn-sm btn-default" data-x="preview">${ico("eye", 13)} ${__("Preview who gets this")}</button><div class="wss-aud-result"></div></div>
+							<div class="wss-aud-preview"><button class="btn btn-sm btn-default" data-x="preview">${ico("eye", 13)} ${__("Preview who gets this")}</button>
+								<button class="btn btn-sm btn-default" data-x="check">${ico("check", 13)} ${__("Check a user")}</button><div class="wss-aud-result"></div></div>
 						</div>
 					</section>
 					<section class="wss-panel"><div class="wss-panel-head">${ico("upload", 16)} ${__("Publishing")}</div><div class="wss-panel-body" data-form="pub"></div></section>
@@ -2199,6 +2200,7 @@ frappe.provide("wss");
 				}
 			);
 			this.$stage.find("[data-x=preview]").on("click", () => this.preview_audience());
+			this.$stage.find("[data-x=check]").on("click", () => this.check_user_dialog());
 			this.render_history();
 		}
 
@@ -2214,6 +2216,36 @@ frappe.provide("wss");
 				});
 			if (this.dirty) this.save(true).then(run);
 			else run();
+		}
+
+		check_user_dialog() {
+			const d = new frappe.ui.Dialog({
+				title: __("Check what a user sees"),
+				size: "large",
+				fields: [
+					{ fieldtype: "Link", fieldname: "user", label: __("User"), options: "User", reqd: 1, get_query: () => ({ filters: { enabled: 1, user_type: "System User" } }) },
+					{ fieldtype: "HTML", fieldname: "result" },
+				],
+				primary_action_label: __("Check"),
+				primary_action: (v) => {
+					const $r = d.get_field("result").$wrapper.html(`<div class="text-muted small">${__("Replaying the desk boot as {0}...", [esc(v.user)])}</div>`);
+					call("check_user", { name: this.name, user: v.user }).then((res) => {
+						const rows = (res.rows || [])
+							.map(
+								(r, i) => `<div class="wss-diag-row ${r.ok ? "is-ok" : "is-bad"}">
+									<span class="wss-diag-ico">${ico(r.ok ? "check" : "alert", 15)}</span>
+									<div class="wss-diag-text"><div class="wss-diag-check">${esc(r.check)}</div>${r.detail ? `<div class="wss-diag-detail">${esc(r.detail)}</div>` : ""}
+									${r.trace ? `<details><summary>${__("Traceback")}</summary><pre>${esc(r.trace)}</pre></details>` : ""}</div>
+								</div>`
+							)
+							.join("");
+						const bad = (res.rows || []).filter((r) => !r.ok).length;
+						$r.html(`<div class="wss-diag-head">${bad ? __("{0} check(s) failed", [bad]) : __("Everything this studio publishes reaches this user.")}
+							<span class="text-muted small">${esc(res.mode || "")} · ${__("workspace")} ${esc(res.workspace || "-")} · ${__("module")} ${esc(res.module || "-")} · ${__("Dock app")} ${esc(res.app || "-")}</span></div>${rows}`);
+					});
+				},
+			});
+			d.show();
 		}
 
 		render_history() {

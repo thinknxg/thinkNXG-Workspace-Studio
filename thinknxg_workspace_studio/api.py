@@ -113,6 +113,7 @@ def create_studio(title, workspace_title=None, template="starter"):
             "layout_json": json.dumps(layout),
             "sidebar_json": json.dumps(sidebar),
             "dock_json": json.dumps(schema.default_dock()),
+            "set_as_default": 1,
         }
     )
     doc.insert()
@@ -239,6 +240,15 @@ def resolve_audience(name):
     users = p.resolve_users()
     details = frappe.get_all("User", filters={"name": ["in", users or [""]]}, fields=["name", "full_name", "user_image"])
     return {"count": len(users), "users": details[:200], "everyone": not doc.targets}
+
+
+@frappe.whitelist()
+def check_user(name, user):
+    """Replay the v16 boot as `user` and report what they see from this studio."""
+    _check()
+    from thinknxg_workspace_studio.diagnostics import check_user as run
+
+    return run(name, user)
 
 
 @frappe.whitelist()
