@@ -1903,7 +1903,10 @@ frappe.provide("wss");
 					</div>
 					<div class="wss-dock-help">${ico("info", 13)} ${
 						this.hints.native_navigation !== false
-							? __("The first entry (this studio's module) is added automatically. Module, Workspace and URL entries go to the native v16 Dock; entries with a dashed ring (lists, new documents, reports, pages, dashboards) appear in the Studio Quick Launch bar.")
+							? ((this.props.publish_mode || "").startsWith("Personal")
+									? __("Personal mode: every user in the audience gets their own Dock, starting with a pin to their personal copy of this workspace.")
+									: __("Shared mode: one site-wide Dock entry pins the shared workspace; v16 shows it only to users who can open it (the audience roles). Users added individually get their own Dock pointing at their personal copy.")) +
+								" " + __("Module, Workspace and URL entries go to the native v16 Dock; entries with a dashed ring (lists, new documents, reports, pages, dashboards) appear in the Studio Quick Launch bar.")
 							: __("Drag to reorder. Items the user has no permission for are hidden automatically.")
 					}</div>
 				</div>`);
@@ -1916,7 +1919,8 @@ frappe.provide("wss");
 			if (native) {
 				const home = { type: "item", label: this.props.workspace_title || this.data.title, icon: this.props.icon, color: "#4f46e5" };
 				const $home = $(window.wss && wss.dock && wss.dock.item_html ? wss.dock.item_html(home) : `<button class="wss-dock-item">${esc(home.label)}</button>`);
-				$home.addClass("is-auto").attr("title", __("Added automatically: this studio's module"));
+				const personal = (this.props.publish_mode || "").startsWith("Personal");
+				$home.addClass("is-auto").attr("title", personal ? __("Added automatically: each user's personal copy of this workspace") : __("Added automatically: the shared workspace"));
 				$dock.append($home);
 			}
 			if (!d.items.length) $dock.append(`<div class="wss-dock-empty">${__("Drag items here")}</div>`);

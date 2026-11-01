@@ -48,14 +48,19 @@ v16 builds the desk from **modules**: a module's sidebar is the menu shown next 
 * **Sidebar menu** — published as a **Custom Sidebar** layer on the studio's module: the site layer
   in Shared mode and one layer per user in Personal mode. The studio's workspace is always the first
   item, so the module opens on it.
-* **Dock** — published to the native **Dock** of the chosen app rail (default ERPNext, else Frappe):
-  * no audience → the site layer (everyone); roles/users → each resolved user's own layer;
+* **Dock** — published to the native **Dock** of the chosen app rail (default ERPNext, else Frappe),
+  following the workspace:
+  * **Shared** mode → one site-wide entry pinning the shared workspace. v16 shows a Workspace pin only
+    to users who can open it, so it reaches exactly the audience roles. Users added individually get
+    their own Dock layer pinned to their personal copy.
+  * **Personal** mode → each user's own Dock layer, pinned to their personal copy.
+  * Opening the pin opens the workspace with the studio's sidebar beside it.
   * **Add** mode (default) keeps the rail's existing entries and puts the studio's entries first;
-    **Replace** mode leaves only the studio's entries;
-  * the studio's module is always the first entry; designer items of type Module, Workspace and
-    URL go to the native Dock;
-  * items the native Dock cannot hold (DocType list, New document, Report, Page, Dashboard) are
-    shown in the Studio **Quick Launch bar** (`app_include_js`), styled in the Dock tab.
+    **Replace** mode leaves only the studio's entries. Re-publishing replaces the studio's previous
+    entries rather than duplicating them.
+  * Extra designer items of type Module, Workspace and URL go to the native Dock; items it cannot
+    hold (DocType list, New document, Report, Page, Dashboard) are shown in the Studio **Quick
+    Launch bar** (`app_include_js`), styled in the Dock tab.
 * **Default workspace** — sets `User.default_workspace` for the audience when enabled.
 * **Safety** — the publisher refuses to overwrite a workspace it doesn't manage unless *Allow
   replacing an existing workspace* is ticked. Every Publish/Unpublish stores a snapshot in **Studio

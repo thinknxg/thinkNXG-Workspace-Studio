@@ -79,8 +79,7 @@ class Publisher:
         self.title = (studio.workspace_title or studio.title).strip()
         self.native = native_navigation()
         self._module = None
-        self.dock_keys = {}  # Dock name -> keys this publish placed in it
-
+        
     # ------------------------------------------------------------------ helpers
     def warn(self, msg):
         if msg not in self.warnings:
@@ -526,9 +525,11 @@ class Publisher:
             self.warn(f"Dock app '{app}' is not installed; using the default rail instead.")
         return "erpnext" if "erpnext" in installed else "frappe"
 
-    def native_dock_entries(self, user_roles):
-        module = self.ensure_module()
-        entries = [{"link_type": "Sidebar", "link_to": module, "title": self.title,
+    def native_dock_entries(self, user_roles, home):
+        """Dock entries for one layer. The first pins the layer's own workspace: the shared one
+        on the site layer, the user's personal copy on a user layer. v16 derives the sidebar
+        from the workspace's module, so it opens with the studio's menu beside it."""
+        entries = [{"link_type": "Workspace", "link_to": home, "title": self.title,
                     "icon": self.doc.icon or DEFAULT_DOCK_ICON, "hidden": 0}]
         for it in self.dock["items"]:
             if not schema.is_native_dock_item(it) or not schema.visible_for(it["roles"], user_roles):
@@ -546,21 +547,31 @@ class Publisher:
             entries.append(entry)
         return entries
 
-    def publish_native_dock(self, users):
-        """`users` is None for the site layer, else the users whose own layer gets the entries."""
+    def publish_native_dock(self, layers):
+        """Follow the workspace: `layers` is [(user or None, workspace)], the same list the
+        sidebar uses. Shared mode writes the site layer (v16 only shows the entry to users who
+        can open the shared workspace, i.e. its audience roles); Personal mode, and users given
+        individually in Shared mode, get their own layer pinned to their personal copy."""
         from frappe.desk.doctype.dock import dock as D
 
         app = self.dock_app()
         replace = (self.doc.get("dock_mode") or "").startswith("Replace")
-        if users is None and _dock_has_roles(self.dock):
-            self.warn("Dock items limited to roles are shown to everyone when there is no audience.")
-        if users:
+        # every entry this studio placed on any layer last time; a new layer may be seeded from
+        # a rail that still carries them (e.g. switching Shared -> Personal)
+        previous_keys = set()
+        for e in self.prev_index:
+            if e.get("doctype") == "Dock":
+                previous_keys.update(e.get("keys") or [])
+        user_layers = [u for u, _home in layers if u]
+        if any(u is None for u, _home in layers) and _dock_has_roles(self.dock):
+            self.warn("Extra Dock items limited to roles are shown to everyone on the shared Dock (the workspace pin itself follows the workspace's roles).")
+        if user_layers:
             self.warn(
-                f"The Dock was written to {len(users)} user layer(s) on the '{app}' rail. Those users keep "
+                f"The Dock was written to {len(user_layers)} user layer(s) on the '{app}' rail. Those users keep "
                 "their current entries, but later site-wide Dock changes will not reach them."
             )
-        for user in users if users is not None else [None]:
-            ours = self.native_dock_entries(frappe.get_roles(user) if user else None)
+        for user, home in layers:
+            ours = self.native_dock_entries(frappe.get_roles(user) if user else None, home)
             keys = {D.dock_key(e) for e in ours}
             existing = D.get_dock(app, user=user)
             if existing:
@@ -571,7 +582,10 @@ class Publisher:
                 current = D.get_user_dock(app, user) if user else []
                 if not current:
                     current = D.resolve_app_dock(app, upto="site", gated=False)
-                rows = ours + [r for r in current if D.dock_key(r) not in keys]
+                # drop this studio's entries from the last publish too, so renamed or removed
+                # items do not linger next to the new ones
+                stale = keys | previous_keys
+                rows = ours + [r for r in current if D.dock_key(r) not in stale]
             rows = [{k: r.get(k) for k in ("link_type", "link_to", "url", "icon", "title", "hidden")} for r in rows]
             D._save_layer(app, rows, user=user, require_visible=False)
             layer = D.get_dock(app, user=user)
@@ -580,7 +594,6 @@ class Publisher:
                 continue
             if not existing:
                 self.snapshots.append({"doctype": "Dock", "name": layer.name, "before": None})
-            self.dock_keys[layer.name] = sorted(keys)
             self.record("Dock", layer.name, "updated" if existing else "created",
                         layer=f"{app} / {user or 'site'}", keys=sorted(keys))
 
@@ -641,13 +654,7 @@ class Publisher:
             if cint(self.doc.publish_sidebar):
                 self.publish_native_sidebar(layer_homes)
             if cint(self.doc.enable_dock):
-                audience = None if not (roles or users) else self.resolve_users()
-                if audience is not None and not audience:
-                    self.warn("The audience has no enabled users yet, so the Dock was not changed. Assign the role(s) to users and publish again.")
-                elif audience is not None and len(audience) > MAX_LAYER_USERS:
-                    self.warn(f"The audience has {len(audience)} users; the Dock is only written for up to {MAX_LAYER_USERS}. Use a smaller audience or no audience (site-wide).")
-                else:
-                    self.publish_native_dock(audience)
+                self.publish_native_dock(layer_homes)
             if cint(self.doc.create_desktop_icon):
                 self.warn("v16 lists the studio's module on the Dock and desktop itself, so no separate Desktop Icon was created.")
         else:
