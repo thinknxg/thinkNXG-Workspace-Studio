@@ -112,6 +112,7 @@
 			.xcall("thinknxg_workspace_studio.runtime.get_runtime_config")
 			.then((cfg) => {
 				runtime.config = cfg || {};
+				if (!runtime.config.dock) console.info("Workspace Studio: no Quick Launch bar for this user (Studio > Audience & Settings > Check a user explains why).");
 				render();
 			})
 			.catch(() => {})
@@ -119,6 +120,7 @@
 	}
 
 	wss.dock.reload = load;
+	wss.dock.status = () => runtime.config;
 
 	let started = false;
 	function start() {

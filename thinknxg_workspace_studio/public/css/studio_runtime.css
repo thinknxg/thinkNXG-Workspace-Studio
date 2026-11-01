@@ -7,7 +7,7 @@
 	gap: 8px;
 	padding: 8px 10px;
 	border-radius: 18px;
-	z-index: 1030;
+	z-index: 1060;
 	max-width: calc(100vw - 24px);
 }
 .wss-dock--small { --wss-s: 36px; --wss-r: 10px; }

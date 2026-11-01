@@ -61,7 +61,9 @@ def match_rank(targets, user, user_roles):
     return None
 
 
-def resolve_dock(user):
+def resolve_dock(user, explain=None):
+    """The Quick Launch bar for `user`. When `explain` is a list, reasons are appended to it."""
+    note = explain.append if isinstance(explain, list) else (lambda _m: None)
     studios = frappe.get_all(
         "Studio Workspace",
         filters={"status": ["in", ["Published", "Modified"]], "enable_dock": 1},
@@ -69,6 +71,11 @@ def resolve_dock(user):
     )
     studios = [s for s in studios if s.published_dock_json]
     if not studios:
+        note(
+            "No published studio has Quick Launch items. The bar only carries items the native v16 Dock "
+            "cannot hold (DocType list, New Document, Report, Page, Dashboard); Module, Workspace and "
+            "URL items go to the native Dock."
+        )
         return None
     targets = frappe.get_all(
         "Studio Target",
@@ -86,12 +93,15 @@ def resolve_dock(user):
         if rank is not None:
             candidates.append((rank, -cint(s.priority), s.name, s))
     if not candidates:
+        note("This user is not in the audience of any studio that has Quick Launch items: " + ", ".join(x.name for x in studios))
         return None
     candidates.sort(key=lambda c: c[:3])
     studio = candidates[0][3]
+    note(f"Studio used: {studio.name} (highest priority match)")
 
     dock = schema.normalize_dock(schema.loads(studio.published_dock_json, {}))
     if not dock["enabled"]:
+        note("'Show the Quick Launch bar' is off in that studio's Dock tab")
         return None
     items = []
     for it in dock["items"]:
@@ -100,8 +110,11 @@ def resolve_dock(user):
                 items.append(it)
             continue
         if not schema.visible_for(it["roles"], user_roles):
+            note(f"'{it['label']}' hidden: limited to roles {', '.join(it['roles'])}")
             continue
         action = resolve_action(it, user, user_roles)
+        if not action:
+            note(f"'{it['label']}' hidden: the user has no permission for {it['link_type']} {it['link_to'] or it['url']}, or it does not exist")
         if action:
             items.append(
                 {
@@ -115,6 +128,7 @@ def resolve_dock(user):
     while items and items[-1]["type"] == "separator":
         items.pop()
     if not items:
+        note("Every Quick Launch item was filtered out for this user")
         return None
     dock["items"] = items
     dock["studio"] = studio.name

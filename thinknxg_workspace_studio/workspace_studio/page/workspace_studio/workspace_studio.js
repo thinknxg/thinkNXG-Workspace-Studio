@@ -2050,7 +2050,14 @@ frappe.provide("wss");
 							this.commit_soon();
 						}
 					);
-					$i.find(".wss-ins-form").before(`<div class="wss-ins-label" style="padding:12px 16px 0">${__("Quick Launch bar")}</div>`);
+					const ql = d.items.filter((x) => x.type === "item" && !is_native_dock(x));
+					const nat = d.items.filter((x) => is_native_dock(x));
+					$i.find(".wss-ins-form").before(`<div class="wss-ins-label" style="padding:12px 16px 0">${__("Quick Launch bar")}</div>
+						<div class="wss-note" style="margin:6px 16px 0">${ico(ql.length ? "info" : "alert", 13)} ${
+							ql.length
+								? __("{0} item(s) go to the Quick Launch bar; {1} to the native Dock.", [ql.length, nat.length])
+								: __("The Quick Launch bar is empty, so it is not shown. Drag DocType List, New Document, Report, Page or Dashboard items onto the Dock to fill it; Module, Workspace and URL items go to the native v16 Dock.")
+						}</div>`);
 				}
 				make_form(
 					$i.find(".wss-ins-form"),

@@ -149,6 +149,21 @@ def check_user(studio_name, user):
 
         rep.run("Home button on the Dock", home_button)
 
+        def quick_launch():
+            from thinknxg_workspace_studio.runtime import resolve_dock
+
+            settings_on = frappe.db.get_single_value("Workspace Studio Settings", "enable_dock")
+            if settings_on is not None and not cint(settings_on):
+                return False, "The Quick Launch bar is switched off in Workspace Studio Settings"
+            reasons = []
+            bar = resolve_dock(user, reasons)
+            if not bar:
+                return False, " · ".join(reasons) or "Nothing to show"
+            labels = [i["label"] for i in bar["items"] if i.get("type") == "item"]
+            return True, f"{len(labels)} item(s): {', '.join(labels)} · " + " · ".join(reasons)
+
+        rep.run("Studio Quick Launch bar", quick_launch)
+
         def apps():
             from frappe.boot import get_app_data
 
