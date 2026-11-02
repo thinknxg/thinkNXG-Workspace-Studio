@@ -202,6 +202,26 @@
 	}
 
 	wss.dock.patch_native_dock = patch_native_dock;
+
+	// ------------------------------------------------------------------ Workspaces desktop icon
+	// In the v16 Desktop Icons grid an App icon that has child icons (the studios' modules are
+	// filed under it) opens a folder pop-up, and one without children follows a single stored
+	// link for everyone. Either way the user does not land on *their* workspace, so a click on the
+	// Workspaces app icon goes to My Workspace (wss-home), which forwards each user to their own
+	// default workspace. Edit mode is left alone so the icon can still be moved or hidden.
+	document.addEventListener(
+		"click",
+		(e) => {
+			const icon = e.target && e.target.closest && e.target.closest('.desktop-icon[data-logo*="thinknxg_workspace_studio"]');
+			if (!icon || e.target.closest(".hide-button")) return;
+			const desktop = frappe.pages && frappe.pages["desktop"] && frappe.pages["desktop"].desktop_page;
+			if (desktop && desktop.edit_mode) return;
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			frappe.set_route("wss-home");
+		},
+		true
+	);
 	if (!patch_native_dock()) {
 		$(document).on("app_ready", patch_native_dock);
 	}

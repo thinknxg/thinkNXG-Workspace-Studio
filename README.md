@@ -69,6 +69,10 @@ v16 builds the desk from **modules**: a module's sidebar is the menu shown next 
   * A layer the studio created is deleted when its user leaves the audience (or on unpublish), so
     that user gets the native rail back; on layers that existed before, only the studio's entries
     are removed. Re-publishing replaces the studio's previous entries instead of duplicating them.
+  * **Workspaces app icon / tile** opens **My Workspace** (`/desk/wss-home`), which forwards each
+    user to their default workspace, else the first studio workspace on their Workspaces rail, else
+    (managers) the Studio designer. This holds on both v16 desktops: the Apps screen and the Desktop
+    Icons grid (where the icon would otherwise open a folder pop-up or one fixed link for everyone).
   * **Home**: a Home button at the top of the Dock on every app's rail opens the user's default
     workspace (or the desk's home module). No Dock layers are written for it.
   * Designer items of type Module, Workspace and URL go to the native Dock; items it cannot hold

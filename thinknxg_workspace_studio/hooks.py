@@ -17,7 +17,7 @@ add_to_apps_screen = [
         "name": "thinknxg_workspace_studio",
         "logo": "/assets/thinknxg_workspace_studio/images/logo.svg",
         "title": "Workspaces",
-        "route": "/desk/workspace-studio",
+        "route": "/desk/wss-home",
         "has_permission": "thinknxg_workspace_studio.api.has_app_permission",
         "sequence_id": 5,
     }

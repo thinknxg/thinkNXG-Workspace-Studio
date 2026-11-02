@@ -895,12 +895,14 @@ class Publisher:
                 self.record("Desktop Icon", name, "shown")
             else:
                 self.record("Desktop Icon", name, "kept")
+            if frappe.db.get_value("Desktop Icon", name, "link") != "/desk/wss-home":
+                frappe.db.set_value("Desktop Icon", name, {"link_type": "External", "link": "/desk/wss-home"})
             return
         label = STUDIO_APP_TITLE if not frappe.db.exists("Desktop Icon", STUDIO_APP_TITLE) else f"thinkNXG {STUDIO_APP_TITLE}"
         icon = frappe.new_doc("Desktop Icon")
         icon.update(self.filter_values("Desktop Icon", {
             "label": label, "icon_type": "App", "app": STUDIO_APP, "link_type": "External",
-            "link": "/desk/workspace-studio", "logo_url": "/assets/thinknxg_workspace_studio/images/logo.svg",
+            "link": "/desk/wss-home", "logo_url": "/assets/thinknxg_workspace_studio/images/logo.svg",
             "hidden": 0, "standard": 0,
         }, "Desktop Icon"))
         icon.insert(ignore_permissions=True)

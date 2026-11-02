@@ -30,3 +30,15 @@ def after_install():
 
 def after_migrate():
     _ensure_role()
+    _fix_app_icon_link()
+
+
+def _fix_app_icon_link():
+    """The Workspaces desktop icon opens My Workspace (/desk/wss-home), which forwards each user
+    to their own workspace. Older versions pointed it at the designer for everyone."""
+    if not frappe.db.exists("DocType", "Desktop Icon"):
+        return
+    for name in frappe.get_all(
+        "Desktop Icon", filters={"icon_type": "App", "app": "thinknxg_workspace_studio"}, pluck="name"
+    ):
+        frappe.db.set_value("Desktop Icon", name, {"link_type": "External", "link": "/desk/wss-home"})
